@@ -149,5 +149,5 @@ SELECT * FROM test_table;
 ---
 
 ### Приложения
-- [Скрипт lab_1.sh](lab_1.sh)
+- [Скрипт lab_1.sh](code_lab/lab_1.sh)
 - [Все скриншоты в папке img/](img/)
