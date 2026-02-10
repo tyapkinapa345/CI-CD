@@ -34,6 +34,11 @@
 docker --version
 ```
 
+Просмотр скачанных образов  
+```bash
+docker images
+```
+
 **Скриншот 2:** Запуск тестового контейнера hello-world  
 ![Hello World](img/hello_world.png)
 
@@ -41,28 +46,7 @@ docker --version
 docker run hello-world
 ```
 
-#### Шаг 4. Работа с основными командами Docker CLI
 
-**Скриншот 3:** Просмотр скачанных образов  
-![Docker Images](img/docker_images.png)
-
-```bash
-docker images
-```
-
-**Скриншот 4:** Просмотр запущенных контейнеров  
-![Docker PS](img/docker_ps.png)
-
-```bash
-docker ps
-```
-
-**Скриншот 5:** Просмотр всех контейнеров  
-![Docker PS All](img/docker_ps_a.png)
-
-```bash
-docker ps -a
-```
 
 ---
 
@@ -89,12 +73,12 @@ FLUSH PRIVILEGES;
 SELECT User, Host FROM mysql.user WHERE User='analyst';
 EOF
 ```
-**Скриншот 6:** Добавление скрипта в NANO
+**Скриншот 4:** Добавление скрипта в NANO
 ![Script Execution](img/script_nano.png)
 
 **2. Запуск скрипта**
 
-**Скриншот 7:** Выполнение скрипта  
+**Скриншот 5:** Выполнение скрипта  
 ![Script Execution](img/script_execution.png)
 
 ```bash
@@ -104,25 +88,20 @@ chmod +x lab_1.sh
 
 **3. Проверка работы контейнера**
 
-**Скриншот 7:** Работающий контейнер MariaDB  
-![MariaDB Container](img/mariadb_container.png)
-
 ```bash
 docker ps
 ```
 
 **4. Проверка созданного пользователя**
 
-**Скриншот 8:** Подключение под пользователем analyst  
-![Analyst Connection](img/analyst_connection.png)
-
 ```bash
 docker exec -it my-db mariadb -u analyst -p
 # Ввод пароля: analyst123
 ```
 
-**Скриншот 9:** Создание тестовой базы данных  
+**Скриншот 6 и 7:** Создание тестовой базы данных  
 ![Test Database](img/test_database.png)
+![Test Database](img/test_database_1.png)
 
 ```sql
 CREATE DATABASE test_db;
@@ -132,15 +111,8 @@ INSERT INTO test_table VALUES (1, 'Тестовые данные');
 SELECT * FROM test_table;
 ```
 
-**5. Проверка списка пользователей**
-
-**Скриншот 10:** Список пользователей MariaDB  
-![User List](img/user_list.png)
-
-```bash
-docker exec my-db mariadb -u root -proot123 -e "SELECT User, Host FROM mysql.user;"
-```
-
+**Скриншот 8:** Удаление контейнера и образа  
+![Test Database](img/delete.png)
 ---
 
 ### Выводы
