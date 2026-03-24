@@ -84,11 +84,11 @@ FROM node:18-alpine
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package.json и package-lock.json (если есть)
+# Копируем package.json (package-lock.json не обязателен)
 COPY app/package*.json ./
 
-# Устанавливаем зависимости (без dev‑зависимостей)
-RUN npm ci --only=production
+# Устанавливаем зависимости (только production)
+RUN npm install --omit=dev
 
 # Копируем исходный код
 COPY app/ .
