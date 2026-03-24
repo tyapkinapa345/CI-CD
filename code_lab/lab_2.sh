@@ -66,8 +66,8 @@ app.listen(PORT, () => {
 
 
 .dockerignore
-node_modules
-npm-debug.log
+__pycache__
+*.pyc
 .git
 .gitignore
 README.md
@@ -78,23 +78,22 @@ README.md
 
 
 Dockerfile 
-# Используем официальный образ Node.js LTS (Alpine для минимального размера)
-FROM node:18-alpine
+FROM python:3.9-slim
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package.json (package-lock.json не обязателен)
-COPY app/package*.json ./
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Устанавливаем зависимости (только production)
-RUN npm install --omit=dev
-
-# Копируем исходный код
 COPY app/ .
 
-# Открываем порт, на котором работает приложение
 EXPOSE 5000
 
-# Запускаем сервер
-CMD ["node", "server.js"]
+CMD ["python", "app.py"]
+
+
+
+requirements.txt
+Flask==2.3.3
+pandas==2.0.3
+numpy==1.24.3
