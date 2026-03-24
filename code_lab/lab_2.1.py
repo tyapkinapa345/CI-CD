@@ -34,3 +34,8 @@ def get_report():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
+
+import time
+start = time.time()
+df = generate_data()
+print(f"Data generation took {time.time()-start:.2f} seconds")
