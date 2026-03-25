@@ -38,7 +38,8 @@ scr/
 └── Dockerfile
 ```
 
-### 2.1 Аналитический сервис (`app/app.py`)
+### 2.1 Аналитический сервис (`scr/app.py`)
+[app.py](app.py)
 
 ```python
 from flask import Flask, jsonify
@@ -77,6 +78,7 @@ if __name__ == '__main__':
 ```
 
 ### 2.2 Зависимости (`requirements.txt`)
+[requirements.txt](requirements.txt)
 
 ```
 Flask==2.3.3
@@ -85,6 +87,7 @@ numpy==1.24.3
 ```
 
 ### 2.3 Dockerfile
+[Dockerfile](Dockerfile)
 
 ```dockerfile
 FROM python:3.9-slim
