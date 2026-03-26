@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-service
+spec:
+  selector:
+    app: rabbitmq
+  type: NodePort
+  ports:
+  - name: amqp
+    port: 5672
+    targetPort: 5672
+    nodePort: 30672      # порт для доступа к AMQP снаружи (необязательно, но удобно)
+  - name: management
+    port: 15672
+    targetPort: 15672
+    nodePort: 31567      # порт для доступа к веб-интерфейсу (30000-32767)
