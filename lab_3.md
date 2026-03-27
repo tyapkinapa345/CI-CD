@@ -144,8 +144,8 @@ kubectl exec -it deployment/rabbitmq -- rabbitmqadmin -u admin -p admin123 get q
 Результат показывает, что сообщение успешно прошло через брокер.
 
 ![Резульат пункта 4](screenshots/rabbitmq-hello-rabbitmq.png)
-![Резульат пункта 4](screenshots/rabbitmq-message_1.png)
-![Резульат пункта 4](screenshots/rabbitmq-message_2.png)
+![Создание сообщений](screenshots/rabbitmq-message_1.png)
+![Вывод сообщений](screenshots/rabbitmq-message_2.png)
 
 ---
 
