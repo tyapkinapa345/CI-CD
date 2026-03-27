@@ -83,6 +83,7 @@ spec:
 ### 2. Развертывание в кластере
 
 Кластер запущен на виртуальной машине с Ubuntu 22.04 под управлением MicroK8s. Для удобства установлен алиас `alias kubectl='microk8s kubectl'`.
+![Запуск](screenshots/microk8s_kubectl.png)
 
 Применяем манифесты:
 ```bash
@@ -101,6 +102,8 @@ kubectl get services
 ![get services](screenshots/get.png)
 
 На скриншотах видно, что под `rabbitmq-*` находится в статусе `Running`, а сервис `rabbitmq-service` имеет тип `NodePort` и порт `31567`.
+
+![Информация о RabbitMQ](screenshots/rabbitmq_.png)
 
 ### 3. Проверка доступности веб-интерфейса
 
@@ -126,6 +129,8 @@ kubectl port-forward service/rabbitmq-service 15672:15672
 
 
 ![Резульат пункта 3](screenshots/rabbitmq-hello-rabbitmq.png)
+![Резульат пункта 3](screenshots/rabbitmq-message_1.png)
+![Резульат пункта 3](screenshots/rabbitmq-message_2.png)
 
 Все операции успешно выполнены. RabbitMQ работает, веб-интерфейс управления доступен.
 
@@ -170,6 +175,6 @@ kubectl exec -it deployment/rabbitmq -- rabbitmqadmin -u admin -p admin123 get q
 
 ## Ссылки на файлы в репозитории
 
-- [Манифест Deployment](./rabbitmq-deployment.yaml)
-- [Манифест Service](./rabbitmq-service.yaml)
+- [Манифест Deployment](rabbitmq-deployment.yaml)
+- [Манифест Service](rabbitmq-service.yaml)
 
