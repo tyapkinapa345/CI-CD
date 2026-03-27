@@ -36,10 +36,10 @@ spec:
     spec:
       containers:
       - name: rabbitmq
-        image: rabbitmq:3.13-management   # Образ с Management Plugin
+        image: rabbitmq:3.13-management
         ports:
-        - containerPort: 5672   # AMQP порт для обмена сообщениями
-        - containerPort: 15672  # Веб-интерфейс управления
+        - containerPort: 5672
+        - containerPort: 15672
         env:
         - name: RABBITMQ_DEFAULT_USER
           value: "admin"
@@ -127,13 +127,6 @@ kubectl port-forward service/rabbitmq-service 15672:15672
 В том же окне, в блоке **Get messages**, нажимаем **Get Message(s)**.  
 Видим полученное сообщение:  
 
-
-![Резульат пункта 3](screenshots/rabbitmq-hello-rabbitmq.png)
-![Резульат пункта 3](screenshots/rabbitmq-message_1.png)
-![Резульат пункта 3](screenshots/rabbitmq-message_2.png)
-
-Все операции успешно выполнены. RabbitMQ работает, веб-интерфейс управления доступен.
-
 ### 4. Дополнительная проверка через терминал
 
 Для подтверждения работоспособности можно использовать встроенную утилиту `rabbitmqadmin`. Выполняем команды прямо из пода:
@@ -149,6 +142,10 @@ kubectl exec -it deployment/rabbitmq -- rabbitmqadmin -u admin -p admin123 publi
 kubectl exec -it deployment/rabbitmq -- rabbitmqadmin -u admin -p admin123 get queue=test-queue ackmode=ack_requeue_false
 ```
 Результат показывает, что сообщение успешно прошло через брокер.
+
+![Резульат пункта 4](screenshots/rabbitmq-hello-rabbitmq.png)
+![Резульат пункта 4](screenshots/rabbitmq-message_1.png)
+![Резульат пункта 4](screenshots/rabbitmq-message_2.png)
 
 ---
 
