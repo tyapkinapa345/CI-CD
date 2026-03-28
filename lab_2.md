@@ -89,17 +89,25 @@ numpy==1.24.3
 [Dockerfile](Dockerfile)
 
 ```dockerfile
+# Используем официальный образ Python 3.9 на основе Debian slim (минимальный размер)
 FROM python:3.9-slim
 
+# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
+# Копируем файл зависимостей отдельно для кэширования слоёв
 COPY requirements.txt .
+
+# Устанавливаем зависимости Python без кэша pip, чтобы уменьшить размер образа
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Копируем исходный код приложения
 COPY app/ .
 
+# Открываем порт, который будет слушать приложение
 EXPOSE 5000
 
+# Команда запуска приложения
 CMD ["python", "app.py"]
 ```
 
