@@ -1,11 +1,4 @@
-docker.io/library/my-backend:v1                                                                                          text/html                                                 sha256:0864d050f90a9537528582bd579f06ddb0e8bf0bf1089fa44a77ba0be60fc0da 337.9 KiB -                                                                                                      io.cri-containerd.image=managed
-dev@dev-vm:~/Downloads/lab_4$ microk8s kubectl describe pod backend-deploy-686cdcbbdf-sjtzj | grep -A5 "Image:"
-    Image:          my-backend:v1
-    Image ID:       
-    Port:           8000/TCP
-    Host Port:      0/TCP
-    State:          Waiting
-      Reason:       ImagePullBackOff
+microk8s kubectl patch deployment backend-deploy -p '{"spec":{"template":{"spec":{"containers":[{"name":"backend","image":"docker.io/library/my-backend:v1","imagePullPolicy":"Never"}]}}}}'
 
       
 Ниже представлено готовое решение лабораторной работы №4.1 по варианту 16 **«Order System»** (управление заказами клиентов).  
