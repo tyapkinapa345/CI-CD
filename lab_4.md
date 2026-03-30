@@ -578,3 +578,167 @@ http://<IP-вашей-ВМ>:30080
 ## Заключение
 
 Разработана полностью работающая система управления заказами, готовая к развёртыванию в Kubernetes. Код написан с соблюдением лучших практик: разделение ответственности (CRUD, модели, схемы), повторные попытки подключения к БД, обработка ошибок, валидация ввода. Интерфейс интуитивно понятен и соответствует бизнес-задаче.
+
+У вас возникла типичная проблема при многократном применении манифестов без удаления старых ресурсов или из-за ошибок в конфигурации. Видно, что поды `backend-deploy` плодятся с разными хэшами (разные ReplicaSet) — это значит, что Deployment каждый раз пересоздавался, а старые ReplicaSet не удалялись, и их поды вытеснялись (Evicted) из-за нехватки ресурсов или конфликта с новыми.
+
+Также есть лишний контейнер `rabbitmq`, не относящийся к заданию, и два пода postgres (один Pending, один Running) — тоже признак дублирования.
+
+## Диагностика
+
+1. **Почему поды в статусе Evicted?**  
+   Кластер MicroK8s, скорее всего, имеет ограниченные ресурсы (память/CPU) и много подов не могут запуститься. Старые поды вытесняются, чтобы освободить место для новых. Но поскольку вы постоянно применяли манифесты, количество подов растёт.
+
+2. **Почему так много backend-подов?**  
+   Каждый раз при изменении Deployment (например, обновлении образа или env) создаётся новый ReplicaSet. Старые остаются, но их поды умирают (Evicted). Это нормальное поведение Kubernetes, но загромождает список.
+
+3. **PostgreSQL: один под Pending, один Running**  
+   Возможно, вы создали два разных Deployment для postgres (например, с разными именами), и один не может запуститься из-за конфликта портов или PV.
+
+## Решение
+
+### 1. Очистите кластер от лишних ресурсов
+
+```bash
+# Удалите всё, что относится к вашему приложению (по лейблам)
+microk8s kubectl delete deployment backend-deploy
+microk8s kubectl delete deployment frontend-deploy
+microk8s kubectl delete deployment postgres-deploy
+
+# Удалите также все лишние ReplicaSet, которые остались (если не удалились автоматически)
+microk8s kubectl delete replicaset --all
+
+# Удалите сервисы
+microk8s kubectl delete svc backend-service frontend-service postgres-service
+
+# Если есть rabbitmq (не из задания) — удалите
+microk8s kubectl delete deployment rabbitmq
+microk8s kubectl delete svc rabbitmq  # если есть
+```
+
+### 2. Проверьте, что у вас нет конфликтующих ресурсов
+
+```bash
+microk8s kubectl get all
+```
+
+Убедитесь, что остались только стандартные поды (CoreDNS и т.п.). Если что-то ещё висит — удалите.
+
+### 3. Примените исправленный манифест (один раз)
+
+Ваш манифест `fullstack.yaml` должен быть без ошибок. Основные моменты:
+
+- Для **PostgreSQL** используйте один Deployment и один Service. Убедитесь, что образ `postgres:13` тянется (если нет интернета — импортируйте образ в MicroK8s).
+- Для **Backend** укажите `imagePullPolicy: IfNotPresent` (так как образ локальный).
+- Убедитесь, что переменные окружения совпадают: `DB_USER`, `DB_PASSWORD`, `DB_NAME` — и в Deployment backend, и в Deployment postgres.
+
+Пример корректного манифеста (только важные части, без дублирования):
+
+```yaml
+# PostgreSQL
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+        env:
+        - name: POSTGRES_USER
+          value: "orderuser"
+        - name: POSTGRES_PASSWORD
+          value: "orderpass"
+        - name: POSTGRES_DB
+          value: "orders_db"
+        ports:
+        - containerPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+```
+
+После очистки примените манифест:
+
+```bash
+microk8s kubectl apply -f k8s/fullstack.yaml
+```
+
+### 4. Проверьте состояние подов
+
+```bash
+microk8s kubectl get pods -w
+```
+
+Дождитесь, пока все три пода (`postgres-deploy-...`, `backend-deploy-...`, `frontend-deploy-...`) перейдут в статус `Running` (1/1).
+
+Если какой-то под завис в `Pending` или `ContainerCreating`, посмотрите причины:
+
+```bash
+microk8s kubectl describe pod <имя_пода>
+```
+
+### 5. Если поды не запускаются из-за нехватки ресурсов
+
+У вас слишком много подов (даже после очистки может быть мало памяти). MicroK8s на виртуальной машине с 2-4 ГБ ОЗУ может не вывозить 3 приложения + БД. Решения:
+
+- **Увеличьте ресурсы ВМ** (ОЗУ до 4-6 ГБ, CPU 2+).
+- **Ограничьте ресурсы подов** в манифесте:
+
+```yaml
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+```
+
+Добавьте такие секции в каждый Deployment (postgres, backend, frontend).
+
+### 6. Доступ к приложению
+
+После того как все поды запустятся:
+
+```bash
+microk8s kubectl get svc frontend-service
+```
+
+Вы увидите `NodePort` (например, `30080`). Откройте в браузере `http://<IP_ВМ>:30080`.
+
+## Дополнительные советы
+
+- **Импорт образов в MicroK8s** (если не используете Docker Hub):
+  ```bash
+  docker save my-backend:v1 -o my-backend.tar
+  microk8s ctr image import my-backend.tar
+  ```
+  Аналогично для frontend.
+
+- **Логи подов** для отладки:
+  ```bash
+  microk8s kubectl logs <имя_пода_backend>
+  ```
+
+- **Если postgres не запускается** из-за ошибки монтирования тома, закомментируйте `volumeMounts` и `volumes` в манифесте (используйте emptyDir или вообще уберите, для лабораторной подойдёт).
+
+## Итог
+
+Проблема вызвана многократным применением манифестов и, возможно, нехваткой ресурсов. После полной очистки и однократного `apply` всё должно заработать. Если останутся ошибки — пришлите вывод `microk8s kubectl describe pod <problematic-pod>` и `microk8s kubectl get events`.
