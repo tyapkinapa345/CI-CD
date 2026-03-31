@@ -1,3 +1,46 @@
+dev@dev-vm:~/Downloads/lab__4$ microk8s kubectl logs deployment/backend-deploy --tail=50
+Traceback (most recent call last):
+  File "/usr/local/bin/uvicorn", line 8, in <module>
+    sys.exit(main())
+  File "/usr/local/lib/python3.9/site-packages/click/core.py", line 1161, in __call__
+    return self.main(*args, **kwargs)
+  File "/usr/local/lib/python3.9/site-packages/click/core.py", line 1082, in main
+    rv = self.invoke(ctx)
+  File "/usr/local/lib/python3.9/site-packages/click/core.py", line 1443, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "/usr/local/lib/python3.9/site-packages/click/core.py", line 788, in invoke
+    return __callback(*args, **kwargs)
+  File "/usr/local/lib/python3.9/site-packages/uvicorn/main.py", line 416, in main
+    run(
+  File "/usr/local/lib/python3.9/site-packages/uvicorn/main.py", line 587, in run
+    server.run()
+  File "/usr/local/lib/python3.9/site-packages/uvicorn/server.py", line 61, in run
+    return asyncio.run(self.serve(sockets=sockets))
+  File "/usr/local/lib/python3.9/asyncio/runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+  File "/usr/local/lib/python3.9/site-packages/uvicorn/server.py", line 68, in serve
+    config.load()
+  File "/usr/local/lib/python3.9/site-packages/uvicorn/config.py", line 467, in load
+    self.loaded_app = import_from_string(self.app)
+  File "/usr/local/lib/python3.9/site-packages/uvicorn/importer.py", line 21, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/usr/local/lib/python3.9/importlib/__init__.py", line 127, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1030, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1007, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 986, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 850, in exec_module
+  File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
+  File "/app/main.py", line 7, in <module>
+    from schemas import OrderCreate, OrderUpdate, OrderResponse
+  File "/app/schemas.py", line 16, in <module>
+    class OrderUpdate(BaseModel):
+  File "/app/schemas.py", line 17, in OrderUpdate
+    order_number: str | None = None
+TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+
 ## Выполнение лабораторной работы 4.1: Order System
 
 Ниже представлено полное решение для варианта 16 «Order System» (Управление заказами клиентов).  
