@@ -134,7 +134,7 @@ class Order(Base):
 ### `backend/schemas.py` – Pydantic схемы для валидации
 ```python
 from pydantic import BaseModel, Field, validator
-from typing import List
+from typing import List, Optional
 
 class OrderCreate(BaseModel):
     order_number: str = Field(..., min_length=1, max_length=50)
@@ -149,10 +149,10 @@ class OrderCreate(BaseModel):
         return v
 
 class OrderUpdate(BaseModel):
-    order_number: str | None = None
-    items: List[str] | None = None
-    amount: float | None = Field(None, gt=0)
-    delivery_address: str | None = None
+    order_number: Optional[str] = None
+    items: Optional[List[str]] = None
+    amount: Optional[float] = Field(None, gt=0)
+    delivery_address: Optional[str] = None
 
 class OrderResponse(OrderCreate):
     id: int
