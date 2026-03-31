@@ -1,45 +1,4 @@
-dev@dev-vm:~/Downloads/lab__4$ microk8s kubectl logs deployment/backend-deploy --tail=50
-Traceback (most recent call last):
-  File "/usr/local/bin/uvicorn", line 8, in <module>
-    sys.exit(main())
-  File "/usr/local/lib/python3.9/site-packages/click/core.py", line 1161, in __call__
-    return self.main(*args, **kwargs)
-  File "/usr/local/lib/python3.9/site-packages/click/core.py", line 1082, in main
-    rv = self.invoke(ctx)
-  File "/usr/local/lib/python3.9/site-packages/click/core.py", line 1443, in invoke
-    return ctx.invoke(self.callback, **ctx.params)
-  File "/usr/local/lib/python3.9/site-packages/click/core.py", line 788, in invoke
-    return __callback(*args, **kwargs)
-  File "/usr/local/lib/python3.9/site-packages/uvicorn/main.py", line 416, in main
-    run(
-  File "/usr/local/lib/python3.9/site-packages/uvicorn/main.py", line 587, in run
-    server.run()
-  File "/usr/local/lib/python3.9/site-packages/uvicorn/server.py", line 61, in run
-    return asyncio.run(self.serve(sockets=sockets))
-  File "/usr/local/lib/python3.9/asyncio/runners.py", line 44, in run
-    return loop.run_until_complete(main)
-  File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
-  File "/usr/local/lib/python3.9/site-packages/uvicorn/server.py", line 68, in serve
-    config.load()
-  File "/usr/local/lib/python3.9/site-packages/uvicorn/config.py", line 467, in load
-    self.loaded_app = import_from_string(self.app)
-  File "/usr/local/lib/python3.9/site-packages/uvicorn/importer.py", line 21, in import_from_string
-    module = importlib.import_module(module_str)
-  File "/usr/local/lib/python3.9/importlib/__init__.py", line 127, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-  File "<frozen importlib._bootstrap>", line 1030, in _gcd_import
-  File "<frozen importlib._bootstrap>", line 1007, in _find_and_load
-  File "<frozen importlib._bootstrap>", line 986, in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
-  File "<frozen importlib._bootstrap_external>", line 850, in exec_module
-  File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
-  File "/app/main.py", line 7, in <module>
-    from schemas import OrderCreate, OrderUpdate, OrderResponse
-  File "/app/schemas.py", line 16, in <module>
-    class OrderUpdate(BaseModel):
-  File "/app/schemas.py", line 17, in OrderUpdate
-    order_number: str | None = None
-TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+
 
 ## Выполнение лабораторной работы 4.1: Order System
 
@@ -407,7 +366,7 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 Один файл содержит все ресурсы: БД (PostgreSQL), Backend, Frontend.
 
 ```yaml
-# PostgreSQL
+# ------------------- PostgreSQL -------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -434,6 +393,19 @@ spec:
           value: "orders_db"
         ports:
         - containerPort: 5432
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -445,8 +417,8 @@ spec:
   ports:
     - port: 5432
       targetPort: 5432
----
-# Backend
+
+# ------------------- Backend -------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -463,7 +435,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: my-backend:v1
+        image: my-backend:v2       # ← исправленный образ (Python 3.9 совместимость)
         imagePullPolicy: IfNotPresent
         env:
         - name: DB_HOST
@@ -476,6 +448,25 @@ spec:
           value: "orders_db"
         ports:
         - containerPort: 8000
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /orders
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /orders
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -487,8 +478,8 @@ spec:
   ports:
     - port: 8000
       targetPort: 8000
----
-# Frontend
+
+# ------------------- Frontend -------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -505,13 +496,32 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: my-frontend:v1
+        image: my-frontend:v2     # ← пересобранный образ фронтенда
         imagePullPolicy: IfNotPresent
         env:
         - name: BACKEND_URL
           value: "http://backend-service:8000"
         ports:
         - containerPort: 8501
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          initialDelaySeconds: 15
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
