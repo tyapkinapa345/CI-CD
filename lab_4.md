@@ -364,7 +364,7 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 Один файл содержит все ресурсы: БД (PostgreSQL), Backend, Frontend.
 
 ```yaml
-# ------------------- PostgreSQL -------------------
+# PostgreSQL
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -391,12 +391,6 @@ spec:
           value: "orders_db"
         ports:
         - containerPort: 5432
-        volumeMounts:
-        - name: postgres-storage
-          mountPath: /var/lib/postgresql/data
-      volumes:
-      - name: postgres-storage
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -408,8 +402,8 @@ spec:
   ports:
     - port: 5432
       targetPort: 5432
-
-# ------------------- Backend -------------------
+---
+# Backend
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -426,7 +420,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: my-backend:v1          # локальный образ
+        image: my-backend:v1
         imagePullPolicy: IfNotPresent
         env:
         - name: DB_HOST
@@ -450,8 +444,8 @@ spec:
   ports:
     - port: 8000
       targetPort: 8000
-
-# ------------------- Frontend -------------------
+---
+# Frontend
 apiVersion: apps/v1
 kind: Deployment
 metadata:
