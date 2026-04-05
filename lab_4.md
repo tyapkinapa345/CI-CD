@@ -1,3 +1,30 @@
+
+➕ Create New Order
+Order Number*
+
+Items*
+Item name
+
+e.g., Laptop
+Quantity
+
+1
+Missing Submit Button
+
+This form has no submit button, which means that user interactions will never be sent to your Streamlit app.
+
+To create a submit button, use the st.form_submit_button() function.
+
+For more information, refer to the documentation for forms.
+
+📦 Order Management System
+StreamlitAPIException: With forms, callbacks can only be defined on the st.form_submit_button. Defining callbacks on other widgets inside a form is not allowed.
+
+Traceback:
+File "/app/app.py", line 44, in <module>
+    st.button("➕ Add", on_click=add_item, use_container_width=True)
+Made with Streamlit
+
 # Лабораторная работа №4.1 Создание и развертывание полнофункционального приложения в Kubernetes
 
 |Вариант|Название системы|Бизнес-задача|Данные (Пример)|
