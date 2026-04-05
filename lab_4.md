@@ -266,6 +266,9 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://backend-service:8000")
 st.set_page_config(page_title="Order System", layout="wide")
 st.title("📦 Order Management System")
 
+# Список статусов (глобально, чтобы был доступен во всех блоках)
+status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
+
 # --- Боковая панель для создания заказа ---
 with st.sidebar:
     st.header("➕ Create New Order")
@@ -274,9 +277,9 @@ with st.sidebar:
         items = st.text_area("Items* (one per line)", help="Enter each item on new line")
         amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
         address = st.text_area("Delivery Address*")
-        submitted = st.form_submit_button("Create Order")
-        status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
         status = st.selectbox("Status", status_options, index=0)
+        submitted = st.form_submit_button("Create Order")
+        
         if submitted:
             if not all([order_number, items, amount, address]):
                 st.error("All fields are required")
@@ -305,7 +308,6 @@ with st.sidebar:
 # --- Основная область: список заказов ---
 st.header("📋 All Orders")
 
-# Функция загрузки заказов
 @st.cache_data(ttl=5)
 def fetch_orders():
     try:
@@ -322,8 +324,10 @@ def fetch_orders():
 orders = fetch_orders()
 if orders:
     df = pd.DataFrame(orders)
-    # Преобразуем список товаров в строку для отображения
     df['items'] = df['items'].apply(lambda x: ", ".join(x))
+    # Если колонки status нет (старые заказы), добавляем
+    if 'status' not in df.columns:
+        df['status'] = 'новый'
     df = df[['id', 'order_number', 'items', 'amount', 'delivery_address', 'status']]
     st.dataframe(df, use_container_width=True)
     
@@ -344,6 +348,8 @@ if orders:
                     st.error("Order not found")
             except Exception as e:
                 st.error(f"Error: {e}")
+    
+    # --- Обновление статуса ---
     st.subheader("✏️ Update Order Status")
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
@@ -363,7 +369,7 @@ if orders:
             except Exception as e:
                 st.error(f"Error: {e}")
 else:
-    st.info("No orders yet. Create one using the sidebar.")
+    st.info("No orders yet. Create one using the sidebar."))
 ```
 
 ### `frontend/Dockerfile`
