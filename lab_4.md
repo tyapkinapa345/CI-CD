@@ -1,30 +1,3 @@
-
-➕ Create New Order
-Order Number*
-
-Items*
-Item name
-
-e.g., Laptop
-Quantity
-
-1
-Missing Submit Button
-
-This form has no submit button, which means that user interactions will never be sent to your Streamlit app.
-
-To create a submit button, use the st.form_submit_button() function.
-
-For more information, refer to the documentation for forms.
-
-📦 Order Management System
-StreamlitAPIException: With forms, callbacks can only be defined on the st.form_submit_button. Defining callbacks on other widgets inside a form is not allowed.
-
-Traceback:
-File "/app/app.py", line 44, in <module>
-    st.button("➕ Add", on_click=add_item, use_container_width=True)
-Made with Streamlit
-
 # Лабораторная работа №4.1 Создание и развертывание полнофункционального приложения в Kubernetes
 
 |Вариант|Название системы|Бизнес-задача|Данные (Пример)|
@@ -420,54 +393,54 @@ status_options = ['новый', 'в обработке', 'отправлен', '
 if 'items_list' not in st.session_state:
     st.session_state.items_list = []  # каждый элемент: {"name": "", "quantity": 1}
 
-# --- Функция для добавления товара в сессию ---
+# --- Функции для работы со списком товаров ---
 def add_item():
-    if st.session_state.new_item_name and st.session_state.new_item_quantity > 0:
-        st.session_state.items_list.append({
-            "name": st.session_state.new_item_name,
-            "quantity": st.session_state.new_item_quantity
-        })
-        st.session_state.new_item_name = ""
+    name = st.session_state.get('new_item_name', '').strip()
+    qty = st.session_state.get('new_item_quantity', 1)
+    if name:
+        st.session_state.items_list.append({"name": name, "quantity": qty})
+        st.session_state.new_item_name = ''
         st.session_state.new_item_quantity = 1
+        st.rerun()
 
-def remove_item(index):
-    st.session_state.items_list.pop(index)
+def remove_item(idx):
+    st.session_state.items_list.pop(idx)
+    st.rerun()
 
-# --- Боковая панель: создание заказа ---
+# --- Боковая панель ---
 with st.sidebar:
     st.header("➕ Create New Order")
+
+    # Добавление товара (ВНЕ формы)
+    st.subheader("Add item")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        st.text_input("Item name", key="new_item_name", placeholder="e.g., Laptop")
+    with col2:
+        st.number_input("Quantity", min_value=1, step=1, key="new_item_quantity", value=1)
+    with col3:
+        st.button("➕ Add", on_click=add_item, use_container_width=True)
+
+    # Отображение текущего списка товаров
+    if st.session_state.items_list:
+        st.write("**Current items:**")
+        for idx, item in enumerate(st.session_state.items_list):
+            col_a, col_b, col_c = st.columns([2, 1, 0.5])
+            col_a.write(f"{item['name']}")
+            col_b.write(f"x{item['quantity']}")
+            if col_c.button("❌", key=f"del_{idx}"):
+                remove_item(idx)
+    else:
+        st.info("No items added yet")
+
+    # Форма для остальных полей заказа
     with st.form("create_order_form"):
         order_number = st.text_input("Order Number*", help="Unique alphanumeric")
-        
-        st.subheader("Items*")
-        # Поля для добавления нового товара
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            st.text_input("Item name", key="new_item_name", placeholder="e.g., Laptop")
-        with col2:
-            st.number_input("Quantity", min_value=1, step=1, key="new_item_quantity", value=1)
-        with col3:
-            st.button("➕ Add", on_click=add_item, use_container_width=True)
-        
-        # Отображение текущего списка товаров
-        if st.session_state.items_list:
-            st.write("**Current items:**")
-            for idx, item in enumerate(st.session_state.items_list):
-                col_a, col_b, col_c = st.columns([2, 1, 0.5])
-                col_a.write(f"{item['name']}")
-                col_b.write(f"x{item['quantity']}")
-                if col_c.button("❌", key=f"del_{idx}"):
-                    remove_item(idx)
-                    st.rerun()
-        else:
-            st.info("No items added yet")
-        
         amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
         address = st.text_area("Delivery Address*")
         status = st.selectbox("Status", status_options, index=0)
-        
         submitted = st.form_submit_button("Create Order")
-        
+
         if submitted:
             if not all([order_number, address]) or not st.session_state.items_list:
                 st.error("Order number, address and at least one item are required")
@@ -483,7 +456,7 @@ with st.sidebar:
                     resp = requests.post(f"{BACKEND_URL}/orders", json=payload)
                     if resp.status_code == 201:
                         st.success("Order created successfully!")
-                        st.session_state.items_list = []  # очистить список
+                        st.session_state.items_list = []
                         st.rerun()
                     else:
                         st.error(f"Error: {resp.json().get('detail', 'Unknown error')}")
