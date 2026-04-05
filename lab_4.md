@@ -1,4 +1,16 @@
-
+dev@dev-vm:~/Downloads/lab__4$ microk8s kubectl get pods -w
+NAME                               READY   STATUS             RESTARTS        AGE
+backend-deploy-7fb7b5fc49-4kf4s    0/1     CrashLoopBackOff   6 (4m27s ago)   22m
+backend-deploy-c59cf76f8-9bcl5     0/1     Running            0               8s
+frontend-deploy-5fcd46558-fg8vk    1/1     Running            0               22m
+postgres-deploy-68f5d94f7f-bbfmb   1/1     Running            0               22m
+backend-deploy-c59cf76f8-9bcl5     1/1     Running            0               13s
+backend-deploy-7fb7b5fc49-4kf4s    0/1     Terminating        6 (4m33s ago)   22m
+backend-deploy-7fb7b5fc49-4kf4s    0/1     Terminating        6               22m
+backend-deploy-7fb7b5fc49-4kf4s    0/1     Terminating        6               22m
+backend-deploy-7fb7b5fc49-4kf4s    0/1     Error              6               22m
+backend-deploy-7fb7b5fc49-4kf4s    0/1     Error              6               22m
+backend-deploy-7fb7b5fc49-4kf4s    0/1     Error              6               22m
 
 ## Выполнение лабораторной работы 4.1: Order System
 
