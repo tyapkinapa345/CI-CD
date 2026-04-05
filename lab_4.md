@@ -289,7 +289,7 @@ with st.sidebar:
                         "order_number": order_number,
                         "items": items_list,
                         "amount": amount,
-                        "delivery_address": address
+                        "delivery_address": address,
                         "status": status
                     }
                     try:
