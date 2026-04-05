@@ -365,7 +365,162 @@ microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v3
 Приложение работает стабильно, данные сохраняются в PostgreSQL, интерфейс доступен через NodePort.  
 Преодолены реальные проблемы, связанные с версиями Python, импортом образов в containerd, настройкой Kubernetes Services и сетевым плагином Calico.
 
+## UPD
 
 **UPD-1: Можно добавить суммирование количество заказов и сумму прибыли... но пока это только идея без реализации. Может быть - когда-нибудь в ~ближайшем~ далёком будущем осуществлю при необходимости. А пока это не входит в задание.**
 
 **UPD-2: Можно добавить колонку "Количество товаров". Может стоит реализовать? Так будет как-то выглядеть эстетичнее. По UPD-1 можно вывести небольшую табличку. Точнее 2: "Количество заказов и прибыль" и "Количество заказов по статусу"**
+
+## Реализация UPD
+
+```python
+import streamlit as st
+import requests
+import pandas as pd
+import os
+
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend-service:8000")
+
+st.set_page_config(page_title="Order System", layout="wide")
+st.title("📦 Order Management System")
+
+status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
+
+# --- Боковая панель: создание заказа ---
+with st.sidebar:
+    st.header("➕ Create New Order")
+    with st.form("create_order_form"):
+        order_number = st.text_input("Order Number*", help="Unique alphanumeric")
+        items = st.text_area("Items* (one per line)", help="Enter each item on new line")
+        amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
+        address = st.text_area("Delivery Address*")
+        status = st.selectbox("Status", status_options, index=0)
+        submitted = st.form_submit_button("Create Order")
+        
+        if submitted:
+            if not all([order_number, items, amount, address]):
+                st.error("All fields are required")
+            else:
+                items_list = [item.strip() for item in items.split("\n") if item.strip()]
+                if not items_list:
+                    st.error("At least one item is required")
+                else:
+                    payload = {
+                        "order_number": order_number,
+                        "items": items_list,
+                        "amount": amount,
+                        "delivery_address": address,
+                        "status": status
+                    }
+                    try:
+                        resp = requests.post(f"{BACKEND_URL}/orders", json=payload)
+                        if resp.status_code == 201:
+                            st.success("Order created successfully!")
+                            st.rerun()
+                        else:
+                            st.error(f"Error: {resp.json().get('detail', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
+
+# --- Основная область: список заказов ---
+st.header("📋 All Orders")
+
+@st.cache_data(ttl=5)
+def fetch_orders():
+    try:
+        resp = requests.get(f"{BACKEND_URL}/orders")
+        if resp.status_code == 200:
+            return resp.json()
+        else:
+            st.error("Failed to fetch orders")
+            return []
+    except Exception as e:
+        st.error(f"Cannot connect to backend: {e}")
+        return []
+
+orders = fetch_orders()
+
+if orders:
+    df = pd.DataFrame(orders)
+    
+    # ---- UPD-2: Добавляем колонку "Количество товаров" ----
+    df['item_count'] = df['items'].apply(len)   # items - это список
+    
+    # Преобразуем список товаров в строку для красивого отображения
+    df['items_str'] = df['items'].apply(lambda x: ", ".join(x))
+    
+    # ---- Подготовка таблицы для вывода (русские названия) ----
+    display_df = df.rename(columns={
+        'id': 'ID',
+        'order_number': 'Order №',
+        'items_str': 'Items',
+        'item_count': 'Qty',
+        'amount': 'Amount ($)',
+        'delivery_address': 'Address',
+        'status': 'Status'
+    })
+    # Выбираем порядок колонок
+    columns_order = ['ID', 'Order №', 'Items', 'Qty', 'Amount ($)', 'Address', 'Status']
+    st.dataframe(display_df[columns_order], use_container_width=True)
+    
+    # ---- UPD-1: Статистика (количество заказов, сумма, распределение по статусам) ----
+    st.subheader("📊 Statistics")
+    
+    total_orders = len(df)
+    total_revenue = df['amount'].sum()
+    total_items_sold = df['item_count'].sum()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total Orders", total_orders)
+        st.metric("Total Revenue", f"${total_revenue:,.2f}")
+        st.metric("Total Items Sold", total_items_sold)
+    with col2:
+        st.write("**Orders by Status**")
+        if 'status' in df.columns:
+            status_counts = df['status'].value_counts().reset_index()
+            status_counts.columns = ['Status', 'Count']
+            st.dataframe(status_counts, use_container_width=True)
+        else:
+            st.info("No status data available")
+    
+    # ---- Удаление заказа (оставляем как было) ----
+    st.subheader("🗑️ Delete Order")
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        order_id_to_delete = st.number_input("Order ID to delete", min_value=1, step=1)
+    with col2:
+        if st.button("Delete Order"):
+            try:
+                resp = requests.delete(f"{BACKEND_URL}/orders/{order_id_to_delete}")
+                if resp.status_code == 204:
+                    st.success("Order deleted")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error("Order not found")
+            except Exception as e:
+                st.error(f"Error: {e}")
+    
+    # ---- Обновление статуса ----
+    st.subheader("✏️ Update Order Status")
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        update_id = st.number_input("Order ID", min_value=1, step=1, key="update_status_id")
+    with col2:
+        new_status = st.selectbox("New Status", status_options, key="new_status")
+    with col3:
+        if st.button("Update Status"):
+            try:
+                resp = requests.put(f"{BACKEND_URL}/orders/{update_id}", json={"status": new_status})
+                if resp.status_code == 200:
+                    st.success("Status updated")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error("Order not found")
+            except Exception as e:
+                st.error(f"Error: {e}")
+else:
+    st.info("No orders yet. Create one using the sidebar.")
+```
