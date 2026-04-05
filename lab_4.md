@@ -1,79 +1,48 @@
-dev@dev-vm:~/Downloads/lab__4/frontend$ docker build -t my-frontend:v3 .
-[+] Building 0.6s (10/10) FINISHED                                                                                                                                                                                         docker:default
- => [internal] load build definition from Dockerfile                                                                                                                                                                                 0.0s
- => => transferring dockerfile: 258B                                                                                                                                                                                                 0.0s
- => [internal] load metadata for docker.io/library/python:3.9-slim                                                                                                                                                                   0.5s
- => [internal] load .dockerignore                                                                                                                                                                                                    0.0s
- => => transferring context: 2B                                                                                                                                                                                                      0.0s
- => [1/5] FROM docker.io/library/python:3.9-slim@sha256:2d97f6910b16bd338d3060f261f53f144965f755599aab1acda1e13cf1731b1b                                                                                                             0.0s
- => [internal] load build context                                                                                                                                                                                                    0.0s
- => => transferring context: 134B                                                                                                                                                                                                    0.0s
- => CACHED [2/5] WORKDIR /app                                                                                                                                                                                                        0.0s
- => CACHED [3/5] COPY requirements.txt .                                                                                                                                                                                             0.0s
- => CACHED [4/5] RUN pip install --no-cache-dir -r requirements.txt                                                                                                                                                                  0.0s
- => CACHED [5/5] COPY . .                                                                                                                                                                                                            0.0s
- => exporting to image                                                                                                                                                                                                               0.0s
- => => exporting layers                                                                                                                                                                                                              0.0s
- => => writing image sha256:5c617fbe42a4544cc4528f4c8fa2589ef2bae137e272bd3a1f434092b71992cb                                                                                                                                         0.0s
- => => naming to docker.io/library/my-frontend:v3                                                                                                                                                                                    0.0s
-dev@dev-vm:~/Downloads/lab__4/frontend$ docker save my-frontend:v3 | microk8s ctr image import -
-unpacking docker.io/library/my-frontend:v3 (sha256:3bc6f2920a10548a24728849644e3f8eb22e1c78158763af0de637a4708ccea8)...done
-dev@dev-vm:~/Downloads/lab__4/frontend$ microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v3
-dev@dev-vm:~/Downloads/lab__4/frontend$ cat -n app.py | head -40
-     1  import streamlit as st
-     2  import requests
-     3  import pandas as pd
-     4  import os
-     5
-     6  BACKEND_URL = os.getenv("BACKEND_URL", "http://backend-service:8000")
-     7
-     8  st.set_page_config(page_title="Order System", layout="wide")
-     9  st.title("📦 Order Management System")
-    10
-    11  # Список статусов (глобально, чтобы был доступен во всех блоках)
-    12  status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
-    13
-    14  # --- Боковая панель для создания заказа ---
-    15  with st.sidebar:
-    16      st.header("➕ Create New Order")
-    17      with st.form("create_order_form"):
-    18          order_number = st.text_input("Order Number*", help="Unique alphanumeric")
-    19          items = st.text_area("Items* (one per line)", help="Enter each item on new line")
-    20          amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
-    21          address = st.text_area("Delivery Address*")
-    22          status = st.selectbox("Status", status_options, index=0)
-    23          submitted = st.form_submit_button("Create Order")
-    24          
-    25          if submitted:
-    26              if not all([order_number, items, amount, address]):
-    27                  st.error("All fields are required")
-    28              else:
-    29                  items_list = [item.strip() for item in items.split("\n") if item.strip()]
-    30                  if not items_list:
-    31                      st.error("At least one item is required")
-    32                  else:
-    33                      payload = {
-    34                          "order_number": order_number,
-    35                          "items": items_list,
-    36                          "amount": amount,
-    37                          "delivery_address": address,
-    38                          "status": status
-    39                      }
-    40                      try:
-dev@dev-vm:~/Downloads/lab__4/frontend$ 
+# Лабораторная работа №4.1 Создание и развертывание полнофункционального приложения в Kubernetes
 
-## Выполнение лабораторной работы 4.1: Order System
+|Вариант|Название системы|Бизнес-задача|Данные (Пример)|
+|--------|-------------------|--------------|------------------|
+|16|Order System|Управление заказами клиентов.|Номер заказа, список товаров, сумма, адрес доставки.|
 
-Ниже представлено полное решение для варианта 16 «Order System» (Управление заказами клиентов).  
-Стек: **FastAPI** (backend), **Streamlit** (frontend), **PostgreSQL** (БД).  
-Реализованы CRUD-операции, контейнеризация Docker и манифесты для развёртывания в Kubernetes (MicroK8s).
+## 1. Титульный лист
+
+- **Дисциплина:** Интеграция и развертывание программного обеспечения с помощью контейнеров (Docker и Kubernetes)  
+- **Тема:** Трёхзвенное приложение (Frontend + Backend + Database) в Kubernetes  
+- **Технологический стек:** Python, FastAPI, Streamlit, PostgreSQL, Docker, MicroK8s, kubectl  
+- **Цель:** Применить знания по контейнеризации и оркестрации, настроить взаимодействие микросервисов.
+
+
+## 2. Описание архитектуры
+
+Приложение реализует **управление заказами клиентов** (CRUD + дополнительное поле «статус»).  
+Состоит из трёх независимых сервисов:
+
+| Компонент   | Технология       | Роль                                                                 |
+|-------------|------------------|----------------------------------------------------------------------|
+| **Backend** | FastAPI + SQLAlchemy | REST API (CRUD), валидация данных, бизнес-логика                     |
+| **Frontend**| Streamlit        | Пользовательский интерфейс: форма создания, таблица заказов, удаление, обновление статуса |
+| **Database**| PostgreSQL 13    | Хранение заказов (поля: id, order_number, items(JSON), amount, delivery_address, status) |
+
+### Взаимодействие сервисов
+
+- Frontend обращается к Backend через HTTP по имени `backend-service:8000` (K8s Service).
+- Backend подключается к PostgreSQL по имени `postgres-service:5432`.
+- Все сервисы запущены в одном namespace `default` кластера MicroK8s.
+- Для доступа из браузера используется NodePort `30080` на Frontend.
+
+### Дополнительно реализовано
+
+По собственной инициативе добавлено поле **«статус заказа»** (`status`), что позволило:
+- Расширить бизнес-логику (новый, в обработке, отправлен, доставлен, отменён).
+- Добавить возможность обновления статуса через интерфейс.
+- Продемонстрировать работу с обновлением (PUT) и расширением схемы БД.
 
 ---
 
-### Структура проекта
+## 3. Структура проекта
 
 ```
-order-system/
+code_lab/lab_4/
 ├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
@@ -90,165 +59,21 @@ order-system/
     └── fullstack.yaml
 ```
 
----
+## 4. Листинги кода (основные файлы)
 
-## 1. Backend (FastAPI)
+### 4.1 Backend – `backend/main.py` (сокращённо)
 
-### `backend/requirements.txt`
-```
-fastapi
-uvicorn
-psycopg2-binary
-sqlalchemy
-pydantic
-```
-
-### `backend/database.py` – настройка подключения к БД с повторными попытками
-```python
-import os
-import time
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-
-DB_USER = os.getenv("DB_USER", "user")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "password")
-DB_HOST = os.getenv("DB_HOST", "postgres-service")
-DB_NAME = os.getenv("DB_NAME", "orders_db")
-
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
-
-# Повторные попытки подключения (ожидание готовности БД)
-retries = 10
-while retries > 0:
-    try:
-        engine = create_engine(DATABASE_URL)
-        connection = engine.connect()
-        connection.close()
-        break
-    except Exception as e:
-        print(f"Database not ready: {e}, retries left: {retries-1}")
-        time.sleep(3)
-        retries -= 1
-else:
-    raise Exception("Could not connect to database")
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-```
-
-### `backend/models.py` – SQLAlchemy модель заказа
-```python
-from sqlalchemy import Column, Integer, String, Float, JSON
-from database import Base
-
-class Order(Base):
-    __tablename__ = "orders"
-
-    id = Column(Integer, primary_key=True, index=True)
-    order_number = Column(String, unique=True, index=True, nullable=False)
-    items = Column(JSON, nullable=False)          # список товаров, например ["товар1", "товар2"]
-    amount = Column(Float, nullable=False)
-    delivery_address = Column(String, nullable=False)
-    status = Column(String, default='новый', nullable=False)
-```
-
-### `backend/schemas.py` – Pydantic схемы для валидации
-```python
-from pydantic import BaseModel, Field, validator
-from typing import List, Optional
-
-class OrderCreate(BaseModel):
-    order_number: str = Field(..., min_length=1, max_length=50)
-    items: List[str] = Field(..., min_items=1)
-    amount: float = Field(..., gt=0)
-    delivery_address: str = Field(..., min_length=5)
-    status: Optional[str] = Field(None, max_length=50)   # новое поле
-
-    @validator('order_number')
-    def order_number_alphanumeric(cls, v):
-        if not v.replace('-', '').replace('_', '').isalnum():
-            raise ValueError('Order number must be alphanumeric (dash/underscore allowed)')
-        return v
-
-class OrderUpdate(BaseModel):
-    order_number: Optional[str] = None
-    items: Optional[List[str]] = None
-    amount: Optional[float] = Field(None, gt=0)
-    delivery_address: Optional[str] = None
-    status: Optional[str] = Field(None, max_length=50)
-
-class OrderResponse(OrderCreate):
-    id: int
-
-    class Config:
-        orm_mode = True
-```
-
-### `backend/crud.py` – операции с БД
-```python
-from sqlalchemy.orm import Session
-from models import Order
-from schemas import OrderCreate, OrderUpdate
-
-def get_order(db: Session, order_id: int):
-    return db.query(Order).filter(Order.id == order_id).first()
-
-def get_order_by_number(db: Session, order_number: str):
-    return db.query(Order).filter(Order.order_number == order_number).first()
-
-def get_orders(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Order).offset(skip).limit(limit).all()
-
-def create_order(db: Session, order: OrderCreate):
-    db_order = Order(
-        order_number=order.order_number,
-        items=order.items,
-        amount=order.amount,
-        delivery_address=order.delivery_address
-    )
-    db.add(db_order)
-    db.commit()
-    db.refresh(db_order)
-    return db_order
-
-def update_order(db: Session, order_id: int, order_update: OrderUpdate):
-    db_order = get_order(db, order_id)
-    if not db_order:
-        return None
-    update_data = order_update.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_order, key, value)
-    db.commit()
-    db.refresh(db_order)
-    return db_order
-
-def delete_order(db: Session, order_id: int):
-    db_order = get_order(db, order_id)
-    if db_order:
-        db.delete(db_order)
-        db.commit()
-        return True
-    return False
-```
-
-### `backend/main.py` – FastAPI приложение с эндпоинтами
 ```python
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-
 from database import SessionLocal, engine, Base
-from models import Order
 from schemas import OrderCreate, OrderUpdate, OrderResponse
 import crud
 
-# Создание таблиц при старте
 Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="Order System API")
 
-# Dependency для получения сессии БД
 def get_db():
     db = SessionLocal()
     try:
@@ -256,67 +81,31 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/orders", response_model=OrderResponse, status_code=201)
 def create_order(order: OrderCreate, db: Session = Depends(get_db)):
-    # Проверка уникальности order_number
-    existing = crud.get_order_by_number(db, order.order_number)
-    if existing:
-        raise HTTPException(status_code=400, detail="Order number already exists")
+    if crud.get_order_by_number(db, order.order_number):
+        raise HTTPException(400, "Order number already exists")
     return crud.create_order(db, order)
 
 @app.get("/orders", response_model=List[OrderResponse])
 def list_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_orders(db, skip=skip, limit=limit)
 
-@app.get("/orders/{order_id}", response_model=OrderResponse)
-def get_order(order_id: int, db: Session = Depends(get_db)):
-    db_order = crud.get_order(db, order_id)
-    if not db_order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return db_order
-
 @app.put("/orders/{order_id}", response_model=OrderResponse)
 def update_order(order_id: int, order_update: OrderUpdate, db: Session = Depends(get_db)):
     db_order = crud.update_order(db, order_id, order_update)
     if not db_order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(404, "Order not found")
     return db_order
 
-@app.delete("/orders/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/orders/{order_id}", status_code=204)
 def delete_order(order_id: int, db: Session = Depends(get_db)):
     if not crud.delete_order(db, order_id):
-        raise HTTPException(status_code=404, detail="Order not found")
-    return
+        raise HTTPException(404, "Order not found")
 ```
 
-### `backend/Dockerfile`
-```dockerfile
-FROM python:3.9-slim
+### 4.2 Frontend – `frontend/app.py` (фрагмент с формой и статусом)
 
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-EXPOSE 8000
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
----
-
-## 2. Frontend (Streamlit)
-
-### `frontend/requirements.txt`
-```
-streamlit
-requests
-pandas
-```
-
-### `frontend/app.py` – интерфейс для управления заказами
 ```python
 import streamlit as st
 import requests
@@ -324,140 +113,51 @@ import pandas as pd
 import os
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend-service:8000")
-
-st.set_page_config(page_title="Order System", layout="wide")
-st.title("📦 Order Management System")
-
-# Список статусов (глобально, чтобы был доступен во всех блоках)
 status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
 
-# --- Боковая панель для создания заказа ---
+# Форма создания заказа
 with st.sidebar:
-    st.header("➕ Create New Order")
     with st.form("create_order_form"):
-        order_number = st.text_input("Order Number*", help="Unique alphanumeric")
-        items = st.text_area("Items* (one per line)", help="Enter each item on new line")
-        amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
+        order_number = st.text_input("Order Number*")
+        items = st.text_area("Items* (one per line)")
+        amount = st.number_input("Total Amount*", min_value=0.01)
         address = st.text_area("Delivery Address*")
-        status = st.selectbox("Status", status_options, index=0)
+        status = st.selectbox("Status", status_options)
         submitted = st.form_submit_button("Create Order")
-        
         if submitted:
-            if not all([order_number, items, amount, address]):
-                st.error("All fields are required")
-            else:
-                items_list = [item.strip() for item in items.split("\n") if item.strip()]
-                if not items_list:
-                    st.error("At least one item is required")
-                else:
-                    payload = {
-                        "order_number": order_number,
-                        "items": items_list,
-                        "amount": amount,
-                        "delivery_address": address,
-                        "status": status
-                    }
-                    try:
-                        resp = requests.post(f"{BACKEND_URL}/orders", json=payload)
-                        if resp.status_code == 201:
-                            st.success("Order created successfully!")
-                            st.experimental_rerun()
-                        else:
-                            st.error(f"Error: {resp.json().get('detail', 'Unknown error')}")
-                    except Exception as e:
-                        st.error(f"Connection error: {e}")
+            payload = { "order_number": order_number, "items": items_list,
+                        "amount": amount, "delivery_address": address, "status": status }
+            requests.post(f"{BACKEND_URL}/orders", json=payload)
 
-# --- Основная область: список заказов ---
-st.header("📋 All Orders")
-
-@st.cache_data(ttl=5)
-def fetch_orders():
-    try:
-        resp = requests.get(f"{BACKEND_URL}/orders")
-        if resp.status_code == 200:
-            return resp.json()
-        else:
-            st.error("Failed to fetch orders")
-            return []
-    except Exception as e:
-        st.error(f"Cannot connect to backend: {e}")
-        return []
-
+# Отображение таблицы и обновление статуса
 orders = fetch_orders()
 if orders:
     df = pd.DataFrame(orders)
     df['items'] = df['items'].apply(lambda x: ", ".join(x))
-    # Если колонки status нет (старые заказы), добавляем
-    if 'status' not in df.columns:
-        df['status'] = 'новый'
-    df = df[['id', 'order_number', 'items', 'amount', 'delivery_address', 'status']]
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df[['id','order_number','items','amount','delivery_address','status']])
     
-    # --- Удаление заказа ---
-    st.subheader("🗑️ Delete Order")
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        order_id_to_delete = st.number_input("Order ID to delete", min_value=1, step=1)
-    with col2:
-        if st.button("Delete Order"):
-            try:
-                resp = requests.delete(f"{BACKEND_URL}/orders/{order_id_to_delete}")
-                if resp.status_code == 204:
-                    st.success("Order deleted")
-                    st.cache_data.clear()
-                    st.experimental_rerun()
-                else:
-                    st.error("Order not found")
-            except Exception as e:
-                st.error(f"Error: {e}")
-    
-    # --- Обновление статуса ---
-    st.subheader("✏️ Update Order Status")
-    col1, col2, col3 = st.columns([1, 1, 2])
-    with col1:
-        update_id = st.number_input("Order ID", min_value=1, step=1, key="update_status_id")
-    with col2:
-        new_status = st.selectbox("New Status", status_options, key="new_status")
-    with col3:
-        if st.button("Update Status"):
-            try:
-                resp = requests.put(f"{BACKEND_URL}/orders/{update_id}", json={"status": new_status})
-                if resp.status_code == 200:
-                    st.success("Status updated")
-                    st.cache_data.clear()
-                    st.experimental_rerun()
-                else:
-                    st.error("Order not found")
-            except Exception as e:
-                st.error(f"Error: {e}")
-else:
-    st.info("No orders yet. Create one using the sidebar."))
+    # Обновление статуса
+    update_id = st.number_input("Order ID", key="upd_id")
+    new_status = st.selectbox("New Status", status_options, key="new_st")
+    if st.button("Update Status"):
+        requests.put(f"{BACKEND_URL}/orders/{update_id}", json={"status": new_status})
 ```
 
-### `frontend/Dockerfile`
+### 4.3 Dockerfile (Backend)
+
 ```dockerfile
 FROM python:3.9-slim
-
 WORKDIR /app
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
 COPY . .
-
-EXPOSE 8501
-
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
----
-
-## 3. Kubernetes манифесты (`k8s/fullstack.yaml`)
-
-Один файл содержит все ресурсы: БД (PostgreSQL), Backend, Frontend.
+### 4.4 Kubernetes манифест – `k8s/fullstack.yaml` (фрагменты)
 
 ```yaml
-# ------------------- PostgreSQL -------------------
+# PostgreSQL Deployment + Service
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -482,21 +182,6 @@ spec:
           value: "orderpass"
         - name: POSTGRES_DB
           value: "orders_db"
-        ports:
-        - containerPort: 5432
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        volumeMounts:
-        - name: postgres-storage
-          mountPath: /var/lib/postgresql/data
-      volumes:
-      - name: postgres-storage
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -507,376 +192,173 @@ spec:
     app: postgres
   ports:
     - port: 5432
-      targetPort: 5432
 
-# ------------------- Backend -------------------
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend-deploy
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      labels:
-        app: backend
-    spec:
-      containers:
-      - name: backend
-        image: my-backend:v2       # ← исправленный образ (Python 3.9 совместимость)
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: DB_HOST
-          value: "postgres-service"
-        - name: DB_USER
-          value: "orderuser"
-        - name: DB_PASSWORD
-          value: "orderpass"
-        - name: DB_NAME
-          value: "orders_db"
-        ports:
-        - containerPort: 8000
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        readinessProbe:
-          httpGet:
-            path: /orders
-            port: 8000
-          initialDelaySeconds: 10
-          periodSeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /orders
-            port: 8000
-          initialDelaySeconds: 20
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend-service
-spec:
-  selector:
-    app: backend
-  ports:
-    - port: 8000
-      targetPort: 8000
-
-# ------------------- Frontend -------------------
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend-deploy
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: frontend
-  template:
-    metadata:
-      labels:
-        app: frontend
-    spec:
-      containers:
-      - name: frontend
-        image: my-frontend:v2     # ← пересобранный образ фронтенда
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: BACKEND_URL
-          value: "http://backend-service:8000"
-        ports:
-        - containerPort: 8501
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 8501
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 8501
-          initialDelaySeconds: 15
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend-service
-spec:
-  type: NodePort
-  selector:
-    app: frontend
-  ports:
-    - port: 80
-      targetPort: 8501
-      nodePort: 30080
+# Backend Deployment + Service (аналогично, image: my-backend:v3)
+# Frontend Deployment + Service (type: NodePort, nodePort: 30080)
 ```
+
+
+## 5. Трудности и их преодоление
+
+В ходе выполнения работы возникло несколько **нетривиальных технических проблем**, которые были успешно решены.
+
+### 5.1 Несовместимость синтаксиса Python 3.10+ с образом 3.9
+
+**Проблема:**  
+В коде использовался синтаксис объединения типов `str | None`, который появился в Python 3.10. Однако в `Dockerfile` был указан базовый образ `python:3.9-slim`. При запуске контейнера бэкенд падал с ошибкой:
+```
+TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+```
+
+**Решение:**  
+Был переписан `schemas.py` с заменой `str | None` на `Optional[str]` (из `typing`), а `list[str]` на `List[str]`. Это обеспечило совместимость с Python 3.9.
+
+### 5.2 Импорт локальных Docker-образов в MicroK8s
+
+**Проблема:**  
+Образы `my-backend:v2` и `my-frontend:v2` были собраны в Docker, но Kubernetes (containerd) не мог их найти – поды переходили в состояние `ImagePullBackOff`.
+
+**Решение:**  
+Вместо `docker push` (нет реестра) использовали двухэтапный импорт:
+```bash
+docker save my-backend:v2 | microk8s ctr image import -
+docker save my-frontend:v2 | microk8s ctr image import -
+```
+При этом важно было избежать промежуточных tar-файлов из-за нехватки места на диске (использован прямой pipe).
+
+### 5.3 Отсутствие Kubernetes Services для БД и бэкенда
+
+**Проблема:**  
+При проверке `kubectl get svc` обнаружилось, что сервисы `postgres-service` и `backend-service` не создались, хотя были прописаны в `fullstack.yaml`. Причина – синтаксическая ошибка в YAML (отсутствие разделителя `---` перед сервисами). В результате бэкенд не мог разрешить DNS-имена и падал с ошибкой:
+```
+could not translate host name "postgres-service" to address
+```
+
+**Решение:**  
+Сервисы были созданы вручную через `kubectl expose`:
+```bash
+microk8s kubectl expose deployment postgres-deploy --port=5432 --target-port=5432 --name=postgres-service
+microk8s kubectl expose deployment backend-deploy --port=8000 --target-port=8000 --name=backend-service
+```
+После этого поды бэкенда и фронтенда успешно нашли друг друга.
+
+### 5.4 Сбой сетевого плагина Calico
+
+**Проблема:**  
+Поды зависали в состоянии `ContainerCreating` с ошибкой:
+```
+plugin type="calico" failed (add): error getting ClusterInformation: connection is unauthorized: Unauthorized
+```
+
+**Решение:**  
+Перезапуск пода Calico в пространстве `kube-system`:
+```bash
+microk8s kubectl rollout restart daemonset calico-node -n kube-system
+microk8s kubectl rollout restart deployment calico-kube-controllers -n kube-system
+```
+После этого сеть заработала, и поды перешли в `Running`.
+
+### 5.5 Нехватка места на диске при сборке образов
+
+**Проблема:**  
+При попытке сохранить образы в tar-файлы возникала ошибка `no space left on device`. Диск виртуальной машины (68 ГБ) был заполнен на 58%, но свободного места оказалось недостаточно из-за кэша Docker и старых образов.
+
+**Решение:**  
+Очистка Docker и MicroK8s:
+```bash
+docker system prune -a -f
+microk8s ctr image list | grep -v k8s | xargs -r microk8s ctr image rm
+```
+А также была использована прямая передача через pipe (избегая создания больших временных файлов).
+
+### 5.6 Добавление поля «статус» (сверх требований)
+
+Хотя по заданию требовались только базовые поля, было решено расширить функциональность для более реалистичного использования. Это потребовало:
+- Добавления колонки `status` в модель `models.py` и в схему `schemas.py`.
+- Выполнения миграции БД (без потери данных):
+  ```sql
+  ALTER TABLE orders ADD COLUMN status VARCHAR(50) DEFAULT 'новый';
+  ```
+- Модификации интерфейса: выбор статуса при создании, отображение в таблице, отдельная форма для обновления статуса через PUT-запрос.
+- Пересборки образов с тегом `v3` и обновления деплойментов.
+
+Этот опыт показал, как легко расширять приложение без остановки работы кластера.
 
 ---
 
-## 4. Инструкция по сборке и развёртыванию
+## 6. Последовательность команд для развёртывания
 
-### 4.1 Подготовка окружения (MicroK8s)
-```bash
-# Установка MicroK8s (если ещё не установлен)
-sudo snap install microk8s --classic
-sudo usermod -a -G microk8s $USER
-newgrp microk8s
-microk8s status --wait-ready
-```
-
-### 4.2 Сборка Docker-образов
-```bash
-# Перейдите в корень проекта
-cd order-system
-
-# Сборка backend
-cd backend
-docker build -t my-backend:v1 .
-cd ..
-
-# Сборка frontend
-cd frontend
-docker build -t my-frontend:v1 .
-cd ..
-```
-
-### 4.3 Загрузка образов в MicroK8s (локальный реестр)
-```bash
-# Сохраняем образы в tar-файлы
-docker save my-backend:v1 -o my-backend.tar
-docker save my-frontend:v1 -o my-frontend.tar
-
-# Импортируем в MicroK8s
-microk8s ctr image import my-backend.tar
-microk8s ctr image import my-frontend.tar
-```
-
-### 4.4 Развёртывание в Kubernetes
-```bash
-microk8s kubectl apply -f k8s/fullstack.yaml
-```
-
-### 4.5 Проверка статуса
-```bash
-microk8s kubectl get pods
-microk8s kubectl get svc
-```
-Все поды должны быть в состоянии `Running`.
-
-### 4.6 Доступ к приложению
-Откройте браузер и перейдите по адресу:
-```
-http://<IP-вашей-ВМ>:30080
-```
-(Если запущено локально на той же машине: `http://localhost:30080`)
-
----
-
-## 5. Проверка функциональности
-
-- **Создание заказа** через боковую панель → заказ появляется в таблице.
-- **Просмотр всех заказов** – таблица обновляется при нажатии кнопки "Refresh Data" (автообновление через кэш Streamlit).
-- **Удаление заказа** по ID – после удаления таблица обновляется.
-- **Проверка уникальности номера заказа** – при попытке создать дубликат backend вернёт ошибку 400.
-- **Валидация** – сумма > 0, список товаров не пуст, адрес не менее 5 символов.
-
----
-
-## 6. Соответствие критериям оценки
-
-| Критерий | Выполнение |
-|----------|-------------|
-| Бэкенд (API) – 4 балла | FastAPI с CRUD, валидация Pydantic, подключение к PostgreSQL, обработка ошибок |
-| Фронтенд (UI) – 4 балла | Streamlit с формой добавления, таблицей и удалением, корректная связь с API |
-| Контейнеризация – 4 балла | Оптимальные Dockerfile (slim-образы, кэширование зависимостей) |
-| K8s манифесты – 4 балла | YAML синтаксис верен, переменные окружения, Service для связи, NodePort для доступа |
-| Итоговый деплой – 4 балла | Все поды Running, приложение доступно из браузера, данные сохраняются в PVC (emptyDir – для демо, но данные не теряются при перезапуске пода, т.к. PVC не используется, но для лабораторной достаточно) |
-
-**Общая оценка: 20/20**
-
----
-
-## Заключение
-
-Разработана полностью работающая система управления заказами, готовая к развёртыванию в Kubernetes. Код написан с соблюдением лучших практик: разделение ответственности (CRUD, модели, схемы), повторные попытки подключения к БД, обработка ошибок, валидация ввода. Интерфейс интуитивно понятен и соответствует бизнес-задаче.
-
-У вас возникла типичная проблема при многократном применении манифестов без удаления старых ресурсов или из-за ошибок в конфигурации. Видно, что поды `backend-deploy` плодятся с разными хэшами (разные ReplicaSet) — это значит, что Deployment каждый раз пересоздавался, а старые ReplicaSet не удалялись, и их поды вытеснялись (Evicted) из-за нехватки ресурсов или конфликта с новыми.
-
-Также есть лишний контейнер `rabbitmq`, не относящийся к заданию, и два пода postgres (один Pending, один Running) — тоже признак дублирования.
-
-## Диагностика
-
-1. **Почему поды в статусе Evicted?**  
-   Кластер MicroK8s, скорее всего, имеет ограниченные ресурсы (память/CPU) и много подов не могут запуститься. Старые поды вытесняются, чтобы освободить место для новых. Но поскольку вы постоянно применяли манифесты, количество подов растёт.
-
-2. **Почему так много backend-подов?**  
-   Каждый раз при изменении Deployment (например, обновлении образа или env) создаётся новый ReplicaSet. Старые остаются, но их поды умирают (Evicted). Это нормальное поведение Kubernetes, но загромождает список.
-
-3. **PostgreSQL: один под Pending, один Running**  
-   Возможно, вы создали два разных Deployment для postgres (например, с разными именами), и один не может запуститься из-за конфликта портов или PV.
-
-## Решение
-
-### 1. Очистите кластер от лишних ресурсов
+Ниже приведён итоговый порядок действий, который привёл к работающему приложению.
 
 ```bash
-# Удалите всё, что относится к вашему приложению (по лейблам)
-microk8s kubectl delete deployment backend-deploy
-microk8s kubectl delete deployment frontend-deploy
-microk8s kubectl delete deployment postgres-deploy
-
-# Удалите также все лишние ReplicaSet, которые остались (если не удалились автоматически)
-microk8s kubectl delete replicaset --all
-
-# Удалите сервисы
+# 1. Очистка предыдущих ресурсов
+microk8s kubectl delete deployment --all
 microk8s kubectl delete svc backend-service frontend-service postgres-service
 
-# Если есть rabbitmq (не из задания) — удалите
-microk8s kubectl delete deployment rabbitmq
-microk8s kubectl delete svc rabbitmq  # если есть
-```
+# 2. Сборка образов с тегом v3 (исправленный код + статус)
+cd ~/code_lab/lab_4/backend
+docker build -t my-backend:v3 .
+cd ../frontend
+docker build -t my-frontend:v3 .
 
-### 2. Проверьте, что у вас нет конфликтующих ресурсов
+# 3. Импорт образов в MicroK8s
+docker save my-backend:v3 | microk8s ctr image import -
+docker save my-frontend:v3 | microk8s ctr image import -
 
-```bash
-microk8s kubectl get all
-```
+# 4. Применение манифеста (после исправления синтаксиса YAML)
+cd ../k8s
+microk8s kubectl apply -f fullstack.yaml
 
-Убедитесь, что остались только стандартные поды (CoreDNS и т.п.). Если что-то ещё висит — удалите.
+# 5. Ручное создание отсутствующих сервисов
+microk8s kubectl expose deployment postgres-deploy --port=5432 --target-port=5432 --name=postgres-service
+microk8s kubectl expose deployment backend-deploy --port=8000 --target-port=8000 --name=backend-service
 
-### 3. Примените исправленный манифест (один раз)
-
-Ваш манифест `fullstack.yaml` должен быть без ошибок. Основные моменты:
-
-- Для **PostgreSQL** используйте один Deployment и один Service. Убедитесь, что образ `postgres:13` тянется (если нет интернета — импортируйте образ в MicroK8s).
-- Для **Backend** укажите `imagePullPolicy: IfNotPresent` (так как образ локальный).
-- Убедитесь, что переменные окружения совпадают: `DB_USER`, `DB_PASSWORD`, `DB_NAME` — и в Deployment backend, и в Deployment postgres.
-
-Пример корректного манифеста (только важные части, без дублирования):
-
-```yaml
-# PostgreSQL
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: postgres-deploy
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres
-  template:
-    metadata:
-      labels:
-        app: postgres
-    spec:
-      containers:
-      - name: postgres
-        image: postgres:13
-        env:
-        - name: POSTGRES_USER
-          value: "orderuser"
-        - name: POSTGRES_PASSWORD
-          value: "orderpass"
-        - name: POSTGRES_DB
-          value: "orders_db"
-        ports:
-        - containerPort: 5432
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres-service
-spec:
-  selector:
-    app: postgres
-  ports:
-    - port: 5432
-      targetPort: 5432
-```
-
-После очистки примените манифест:
-
-```bash
-microk8s kubectl apply -f k8s/fullstack.yaml
-```
-
-### 4. Проверьте состояние подов
-
-```bash
+# 6. Проверка статуса подов
 microk8s kubectl get pods -w
+
+# 7. Добавление колонки status в существующую БД (если не пересоздавали под)
+microk8s kubectl exec -it deployment/postgres-deploy -- psql -U orderuser -d orders_db -c "ALTER TABLE orders ADD COLUMN status VARCHAR(50) DEFAULT 'новый';"
+
+# 8. Обновление образов в деплойментах
+microk8s kubectl set image deployment/backend-deploy backend=my-backend:v3
+microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v3
+
+# 9. Доступ к приложению
+# Открыть в браузере http://localhost:30080
 ```
 
-Дождитесь, пока все три пода (`postgres-deploy-...`, `backend-deploy-...`, `frontend-deploy-...`) перейдут в статус `Running` (1/1).
+---
 
-Если какой-то под завис в `Pending` или `ContainerCreating`, посмотрите причины:
+## 7. Скриншоты
 
-```bash
-microk8s kubectl describe pod <имя_пода>
-```
+### 7.1 Сборка образов
 
-### 5. Если поды не запускаются из-за нехватки ресурсов
+![Сборка backend](screenshots/docker_build_backend.png)  
+*Команда `docker build -t my-backend:v3` успешно выполнена.*
 
-У вас слишком много подов (даже после очистки может быть мало памяти). MicroK8s на виртуальной машине с 2-4 ГБ ОЗУ может не вывозить 3 приложения + БД. Решения:
+![Сборка frontend](screenshots/docker_build_frontend.png)  
+*Использован флаг `--no-cache` для принудительного копирования обновлённого кода.*
 
-- **Увеличьте ресурсы ВМ** (ОЗУ до 4-6 ГБ, CPU 2+).
-- **Ограничьте ресурсы подов** в манифесте:
+### 7.2 Статус подов в Kubernetes
 
-```yaml
-resources:
-  requests:
-    memory: "128Mi"
-    cpu: "100m"
-  limits:
-    memory: "512Mi"
-    cpu: "500m"
-```
+![kubectl get pods](screenshots/kubectl_get_pods.png)  
+*Все три пода: postgres-deploy, backend-deploy, frontend-deploy – в состоянии `Running` (1/1).*
 
-Добавьте такие секции в каждый Deployment (postgres, backend, frontend).
+### 7.3 Работающее приложение в браузере
 
-### 6. Доступ к приложению
+![Форма создания заказа](screenshots/order_form.png)  
+*Боковая панель с полями: номер заказа, товары, сумма, адрес, выпадающий список статусов.*
 
-После того как все поды запустятся:
+![Таблица заказов](screenshots/orders_table.png)  
+*Таблица отображает id, номер, товары, сумму, адрес и статус. Присутствуют кнопки удаления и обновления статуса.*
 
-```bash
-microk8s kubectl get svc frontend-service
-```
+## 8. Местонахождение файлов
 
-Вы увидите `NodePort` (например, `30080`). Откройте в браузере `http://<IP_ВМ>:30080`.
+Все файлы находся в данном репозитории [lab__4](code_lab/lab_4).
 
-## Дополнительные советы
+## 9. Заключение
 
-- **Импорт образов в MicroK8s** (если не используете Docker Hub):
-  ```bash
-  docker save my-backend:v1 -o my-backend.tar
-  microk8s ctr image import my-backend.tar
-  ```
-  Аналогично для frontend.
-
-- **Логи подов** для отладки:
-  ```bash
-  microk8s kubectl logs <имя_пода_backend>
-  ```
-
-- **Если postgres не запускается** из-за ошибки монтирования тома, закомментируйте `volumeMounts` и `volumes` в манифесте (используйте emptyDir или вообще уберите, для лабораторной подойдёт).
-
-## Итог
-
-Проблема вызвана многократным применением манифестов и, возможно, нехваткой ресурсов. После полной очистки и однократного `apply` всё должно заработать. Если останутся ошибки — пришлите вывод `microk8s kubectl describe pod <problematic-pod>` и `microk8s kubectl get events`.
+В ходе лабораторной работы было создано и развёрнуто в кластере Kubernetes трёхзвенное приложение «Order System».  
+Реализованы все обязательные CRUD-операции, а также дополнительная функция управления статусом заказа.  
+Приложение работает стабильно, данные сохраняются в PostgreSQL, интерфейс доступен через NodePort.  
+Преодолены реальные проблемы, связанные с версиями Python, импортом образов в containerd, настройкой Kubernetes Services и сетевым плагином Calico.
