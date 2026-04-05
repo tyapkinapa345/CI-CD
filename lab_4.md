@@ -88,6 +88,7 @@ class Order(Base):
     items = Column(JSON, nullable=False)          # список товаров, например ["товар1", "товар2"]
     amount = Column(Float, nullable=False)
     delivery_address = Column(String, nullable=False)
+    status = Column(String, default='новый', nullable=False)
 ```
 
 ### `backend/schemas.py` – Pydantic схемы для валидации
@@ -100,6 +101,7 @@ class OrderCreate(BaseModel):
     items: List[str] = Field(..., min_items=1)
     amount: float = Field(..., gt=0)
     delivery_address: str = Field(..., min_length=5)
+    status: Optional[str] = Field(None, max_length=50)   # новое поле
 
     @validator('order_number')
     def order_number_alphanumeric(cls, v):
@@ -112,6 +114,7 @@ class OrderUpdate(BaseModel):
     items: Optional[List[str]] = None
     amount: Optional[float] = Field(None, gt=0)
     delivery_address: Optional[str] = None
+    status: Optional[str] = Field(None, max_length=50)
 
 class OrderResponse(OrderCreate):
     id: int
@@ -272,7 +275,8 @@ with st.sidebar:
         amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
         address = st.text_area("Delivery Address*")
         submitted = st.form_submit_button("Create Order")
-        
+        status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
+        status = st.selectbox("Status", status_options, index=0)
         if submitted:
             if not all([order_number, items, amount, address]):
                 st.error("All fields are required")
@@ -286,6 +290,7 @@ with st.sidebar:
                         "items": items_list,
                         "amount": amount,
                         "delivery_address": address
+                        "status": status
                     }
                     try:
                         resp = requests.post(f"{BACKEND_URL}/orders", json=payload)
@@ -319,7 +324,7 @@ if orders:
     df = pd.DataFrame(orders)
     # Преобразуем список товаров в строку для отображения
     df['items'] = df['items'].apply(lambda x: ", ".join(x))
-    df = df[['id', 'order_number', 'items', 'amount', 'delivery_address']]
+    df = df[['id', 'order_number', 'items', 'amount', 'delivery_address', 'status']]
     st.dataframe(df, use_container_width=True)
     
     # --- Удаление заказа ---
@@ -333,6 +338,24 @@ if orders:
                 resp = requests.delete(f"{BACKEND_URL}/orders/{order_id_to_delete}")
                 if resp.status_code == 204:
                     st.success("Order deleted")
+                    st.cache_data.clear()
+                    st.experimental_rerun()
+                else:
+                    st.error("Order not found")
+            except Exception as e:
+                st.error(f"Error: {e}")
+    st.subheader("✏️ Update Order Status")
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        update_id = st.number_input("Order ID", min_value=1, step=1, key="update_status_id")
+    with col2:
+        new_status = st.selectbox("New Status", status_options, key="new_status")
+    with col3:
+        if st.button("Update Status"):
+            try:
+                resp = requests.put(f"{BACKEND_URL}/orders/{update_id}", json={"status": new_status})
+                if resp.status_code == 200:
+                    st.success("Status updated")
                     st.cache_data.clear()
                     st.experimental_rerun()
                 else:
