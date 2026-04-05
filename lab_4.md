@@ -367,280 +367,82 @@ microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v3
 
 ---
 
-## UPD
+# UPD
 
 **UPD-1: Можно добавить суммирование количество заказов и сумму прибыли... но пока это только идея без реализации. Может быть - когда-нибудь в ~ближайшем~ далёком будущем осуществлю при необходимости. А пока это не входит в задание.**
 
 **UPD-2: Можно добавить колонку "Количество товаров". Может стоит реализовать? Так будет как-то выглядеть эстетичнее. По UPD-1 можно вывести небольшую табличку. Точнее 2: "Количество заказов и прибыль" и "Количество заказов по статусу"**
 
-## Реализация UPD
+## UPD-3: Реализация дополнительного функционала (сверх требований)
 
-Обновленный `frontend/app.py`
-```python
-import streamlit as st
-import requests
-import pandas as pd
-import os
+Несмотря на то, что задание этого не требовало, я решила добавить в приложение несколько улучшений, чтобы сделать его более полезным и наглядным:
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://backend-service:8000")
+### Добавленные возможности
 
-st.set_page_config(page_title="Order System", layout="wide")
-st.title("📦 Order Management System")
+1. **Поле «Статус заказа»** (новый, в обработке, отправлен, доставлен, отменён) – добавлено в модель БД, в формы создания и обновления, отображается в таблице.
+2. **Колонка «Количество товаров» (Total Qty)** – теперь каждый товар имеет не только название, но и количество. В таблице отображается общее число единиц в заказе.
+3. **Блок статистики**:
+   - Общее количество заказов.
+   - Общая выручка (сумма всех заказов).
+   - Общее количество проданных товаров.
+   - Распределение заказов по статусам (таблица).
+4. **Динамическое добавление товаров в форму** – пользователь может добавить несколько товаров с указанием количества, видеть список добавленного и удалять позиции до отправки заказа.
 
-status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
+### Технические изменения
 
-# --- Инициализация сессии для списка товаров ---
-if 'items_list' not in st.session_state:
-    st.session_state.items_list = []  # каждый элемент: {"name": "", "quantity": 1}
+#### Backend
 
-# --- Функции для работы со списком товаров ---
-def add_item():
-    name = st.session_state.get('new_item_name', '').strip()
-    qty = st.session_state.get('new_item_quantity', 1)
-    if name:
-        st.session_state.items_list.append({"name": name, "quantity": qty})
-        st.session_state.new_item_name = ''
-        st.session_state.new_item_quantity = 1
-        st.rerun()
+- **`backend/schemas.py`** – добавлена модель `OrderItem` с полями `name` и `quantity`, изменены `OrderCreate` и `OrderUpdate` для приёма списка таких объектов.
+- **`backend/crud.py`** – в функцию `create_order` добавлено преобразование `[item.dict() for item in order.items]`, чтобы SQLAlchemy мог сохранить данные в JSON-поле. Аналогично для `update_order`.
+- **База данных** – поле `items` осталось типа JSON, но теперь хранит массив объектов вида `{"name": "...", "quantity": N}`. Старые заказы (если были) удалены через пересоздание пода PostgreSQL.
 
-def remove_item(idx):
-    st.session_state.items_list.pop(idx)
-    st.rerun()
+#### Frontend
 
-# --- Боковая панель ---
-with st.sidebar:
-    st.header("➕ Create New Order")
+- **`frontend/app.py`** – полностью переработана форма создания:
+  - Добавление товаров вынесено из `st.form` (чтобы избежать ошибок с колбэками).
+  - Использован `st.session_state` для хранения списка товаров между обновлениями.
+  - Кнопка «➕ Add» добавляет текущий товар в список, отображаемый под полями ввода.
+  - При отправке заказа формируется `payload` с `items` как список словарей `{"name": ..., "quantity": ...}`.
+- **Отображение таблицы**:
+  - Поле `items` преобразуется в строку вида `"мышь (10), клавиатура (2)"`.
+  - Добавлена колонка `Total Qty` (сумма количеств всех товаров).
+  - Переименованы заголовки на русский язык.
+- **Статистика** – вычисляется на основе полученных данных (без дополнительных запросов).
 
-    # Добавление товара (ВНЕ формы)
-    st.subheader("Add item")
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.text_input("Item name", key="new_item_name", placeholder="e.g., Laptop")
-    with col2:
-        st.number_input("Quantity", min_value=1, step=1, key="new_item_quantity", value=1)
-    with col3:
-        st.button("➕ Add", on_click=add_item, use_container_width=True)
+### Новые ошибки и их преодоление
 
-    # Отображение текущего списка товаров
-    if st.session_state.items_list:
-        st.write("**Current items:**")
-        for idx, item in enumerate(st.session_state.items_list):
-            col_a, col_b, col_c = st.columns([2, 1, 0.5])
-            col_a.write(f"{item['name']}")
-            col_b.write(f"x{item['quantity']}")
-            if col_c.button("❌", key=f"del_{idx}"):
-                remove_item(idx)
-    else:
-        st.info("No items added yet")
+| Ошибка | Причина | Решение |
+|--------|---------|---------|
+| `Object of type OrderItem is not JSON serializable` | SQLAlchemy не умеет сохранять Pydantic-объекты напрямую | Преобразование `item.dict()` перед записью в БД |
+| `With forms, callbacks can only be defined on the st.form_submit_button` | Внутри `st.form` нельзя использовать `st.button(on_click=...)` | Вынес кнопку «Add» за пределы формы, оставив в форме только поля и кнопку отправки |
+| `Connection error: Expecting value: line 1 column 1` | Бэкенд возвращал ошибку 500 (из-за JSON-сериализации) | Исправлен `crud.py`, обновлён образ бэкенда |
+| Отсутствие колонки `status` в старых заказах | Добавление поля позже | Выполнен ALTER TABLE или пересоздан под PostgreSQL |
 
-    # Форма для остальных полей заказа
-    with st.form("create_order_form"):
-        order_number = st.text_input("Order Number*", help="Unique alphanumeric")
-        amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
-        address = st.text_area("Delivery Address*")
-        status = st.selectbox("Status", status_options, index=0)
-        submitted = st.form_submit_button("Create Order")
+### Скриншоты обновлённого приложения
 
-        if submitted:
-            if not all([order_number, address]) or not st.session_state.items_list:
-                st.error("Order number, address and at least one item are required")
-            else:
-                payload = {
-                    "order_number": order_number,
-                    "items": st.session_state.items_list,
-                    "amount": amount,
-                    "delivery_address": address,
-                    "status": status
-                }
-                try:
-                    resp = requests.post(f"{BACKEND_URL}/orders", json=payload)
-                    if resp.status_code == 201:
-                        st.success("Order created successfully!")
-                        st.session_state.items_list = []
-                        st.rerun()
-                    else:
-                        st.error(f"Error: {resp.json().get('detail', 'Unknown error')}")
-                except Exception as e:
-                    st.error(f"Connection error: {e}")
+![Форма создания](screenshots/upd_order_form.png)
+![Таблица заказов](screenshots/upd_orders_table.png)
 
-# --- Основная область: список заказов ---
-st.header("📋 All Orders")
+### Команды для пересборки после добавления функционала
 
-@st.cache_data(ttl=5)
-def fetch_orders():
-    try:
-        resp = requests.get(f"{BACKEND_URL}/orders")
-        if resp.status_code == 200:
-            return resp.json()
-        else:
-            st.error("Failed to fetch orders")
-            return []
-    except Exception as e:
-        st.error(f"Cannot connect to backend: {e}")
-        return []
+```bash
+# Бэкенд (v5 – с исправленным crud.py)
+cd backend
+docker build --no-cache -t my-backend:v5 .
+docker save my-backend:v5 | microk8s ctr image import -
+microk8s kubectl set image deployment/backend-deploy backend=my-backend:v5
 
-orders = fetch_orders()
+# Фронтенд (v5 – финальная версия с динамическими товарами и статистикой)
+cd ../frontend
+docker build --no-cache -t my-frontend:v5 .
+docker save my-frontend:v5 | microk8s ctr image import -
+microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v5
 
-if orders:
-    df = pd.DataFrame(orders)
-    
-    # --- Обработка items: преобразуем список объектов в строку "name (quantity), ..." ---
-    def format_items(items_list):
-        if not items_list:
-            return ""
-        return ", ".join([f"{item['name']} ({item['quantity']})" for item in items_list])
-    
-    def total_quantity(items_list):
-        return sum(item['quantity'] for item in items_list)
-    
-    df['items_str'] = df['items'].apply(format_items)
-    df['total_quantity'] = df['items'].apply(total_quantity)
-    
-    # --- Подготовка таблицы для вывода ---
-    display_df = df.rename(columns={
-        'id': 'ID',
-        'order_number': 'Order №',
-        'items_str': 'Items',
-        'total_quantity': 'Total Qty',
-        'amount': 'Amount ($)',
-        'delivery_address': 'Address',
-        'status': 'Status'
-    })
-    columns_order = ['ID', 'Order №', 'Items', 'Total Qty', 'Amount ($)', 'Address', 'Status']
-    st.dataframe(display_df[columns_order], use_container_width=True)
-    
-    # --- Статистика ---
-    st.subheader("📊 Statistics")
-    total_orders = len(df)
-    total_revenue = df['amount'].sum()
-    total_items_sold = df['total_quantity'].sum()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Total Orders", total_orders)
-        st.metric("Total Revenue", f"${total_revenue:,.2f}")
-        st.metric("Total Items Sold", total_items_sold)
-    with col2:
-        st.write("**Orders by Status**")
-        if 'status' in df.columns:
-            status_counts = df['status'].value_counts().reset_index()
-            status_counts.columns = ['Status', 'Count']
-            st.dataframe(status_counts, use_container_width=True)
-    
-    # --- Удаление заказа ---
-    st.subheader("🗑️ Delete Order")
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        order_id_to_delete = st.number_input("Order ID to delete", min_value=1, step=1)
-    with col2:
-        if st.button("Delete Order"):
-            try:
-                resp = requests.delete(f"{BACKEND_URL}/orders/{order_id_to_delete}")
-                if resp.status_code == 204:
-                    st.success("Order deleted")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("Order not found")
-            except Exception as e:
-                st.error(f"Error: {e}")
-    
-    # --- Обновление статуса ---
-    st.subheader("✏️ Update Order Status")
-    col1, col2, col3 = st.columns([1, 1, 2])
-    with col1:
-        update_id = st.number_input("Order ID", min_value=1, step=1, key="update_status_id")
-    with col2:
-        new_status = st.selectbox("New Status", status_options, key="new_status")
-    with col3:
-        if st.button("Update Status"):
-            try:
-                resp = requests.put(f"{BACKEND_URL}/orders/{update_id}", json={"status": new_status})
-                if resp.status_code == 200:
-                    st.success("Status updated")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("Order not found")
-            except Exception as e:
-                st.error(f"Error: {e}")
-else:
-    st.info("No orders yet. Create one using the sidebar.")
+# Перезапуск подов (для уверенности)
+microk8s kubectl rollout restart deployment/backend-deploy
+microk8s kubectl rollout restart deployment/frontend-deploy
 ```
 
-Строчка `backend/models.py`
-```python
-items = Column(JSON, nullable=False)   # пример: [{"name": "мышь", "quantity": 10}, ...]
-```
+### Итог
 
- `backend/schemas.py`
-```python
-from pydantic import BaseModel, Field, validator
-from typing import List, Optional
-
-class OrderItem(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    quantity: int = Field(..., ge=1, le=10000)
-
-class OrderCreate(BaseModel):
-    order_number: str = Field(..., min_length=1, max_length=50)
-    items: List[OrderItem]   # теперь список объектов с name и quantity
-    amount: float = Field(..., gt=0)
-    delivery_address: str = Field(..., min_length=5)
-    status: Optional[str] = Field('новый', max_length=50)
-
-    @validator('order_number')
-    def order_number_alphanumeric(cls, v):
-        if not v.replace('-', '').replace('_', '').isalnum():
-            raise ValueError('Order number must be alphanumeric (dash/underscore allowed)')
-        return v
-
-class OrderUpdate(BaseModel):
-    order_number: Optional[str] = None
-    items: Optional[List[OrderItem]] = None
-    amount: Optional[float] = Field(None, gt=0)
-    delivery_address: Optional[str] = None
-    status: Optional[str] = Field(None, max_length=50)
-
-class OrderResponse(OrderCreate):
-    id: int
-    class Config:
-        orm_mode = True
-```
-
-`crud.py`
-```python
-from sqlalchemy.orm import Session
-from models import Order
-from schemas import OrderCreate, OrderUpdate
-
-def create_order(db: Session, order: OrderCreate):
-    # Преобразуем список OrderItem в список словарей
-    items_dicts = [item.dict() for item in order.items]
-    db_order = Order(
-        order_number=order.order_number,
-        items=items_dicts,
-        amount=order.amount,
-        delivery_address=order.delivery_address,
-        status=order.status
-    )
-    db.add(db_order)
-    db.commit()
-    db.refresh(db_order)
-    return db_order
-
-def update_order(db: Session, order_id: int, order_update: OrderUpdate):
-    db_order = get_order(db, order_id)
-    if not db_order:
-        return None
-    update_data = order_update.dict(exclude_unset=True)
-    if 'items' in update_data and update_data['items'] is not None:
-        update_data['items'] = [item.dict() for item in update_data['items']]
-    for key, value in update_data.items():
-        setattr(db_order, key, value)
-    db.commit()
-    db.refresh(db_order)
-    return db_order
-
-# Остальные функции (get_order, get_orders, delete_order) без изменений
-```
+Все добавленные улучшения успешно работают в кластере Kubernetes. Приложение стало более информативным, удобным и приближенным к реальным бизнес-сценариям. Опыт расширения функциональности показал, как важно предусматривать гибкость структур данных (JSON-поле `items`) и правильно обрабатывать объекты на границе Pydantic ↔ SQLAlchemy.
