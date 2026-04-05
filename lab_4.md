@@ -442,6 +442,9 @@ microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v5
 microk8s kubectl rollout restart deployment/backend-deploy
 microk8s kubectl rollout restart deployment/frontend-deploy
 ```
+## Местонахождение файлов
+
+Все обновлённые файлы находся в данном репозитории в папках [`frontend`](code_lab/lab_4/frontend/upd) и [`backend`](code_lab/lab_4/backend/upd). В данных папках находятся файлы, подвергшиеся обновлениям.
 
 На всякий пожарный - [Ctrl+P страницы](UpdOrderSystem.pdf). ~Форма немного съехала при проведение операции сохранения~
 
