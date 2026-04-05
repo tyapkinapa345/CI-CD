@@ -1,59 +1,3 @@
-dev@dev-vm:~/Downloads/lab__4/frontend$ cd ../backend
-dev@dev-vm:~/Downloads/lab__4/backend$ microk8s kubectl logs deployment/backend-deploy --tail=50
-    return json_serializer(value)
-  File "/usr/local/lib/python3.10/json/__init__.py", line 231, in dumps
-    return _default_encoder.encode(obj)
-  File "/usr/local/lib/python3.10/json/encoder.py", line 199, in encode
-    chunks = self.iterencode(o, _one_shot=True)
-  File "/usr/local/lib/python3.10/json/encoder.py", line 257, in iterencode
-    return _iterencode(o, 0)
-  File "/usr/local/lib/python3.10/json/encoder.py", line 179, in default
-    raise TypeError(f'Object of type {o.__class__.__name__} '
-sqlalchemy.exc.StatementError: (builtins.TypeError) Object of type OrderItem is not JSON serializable
-[SQL: INSERT INTO orders (order_number, items, amount, delivery_address, status) VALUES (%(order_number)s, %(items)s, %(amount)s, %(delivery_address)s, %(status)s) RETURNING orders.id]
-[parameters: [{'order_number': 'ORD-1', 'amount': 25.0, 'delivery_address': '10 Lenin Street', 'items': [OrderItem(name='mouse', quantity=1)]}]]
-INFO:     10.1.44.116:59062 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:36560 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:37476 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:37488 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:37496 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:54338 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:54354 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:54362 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:42844 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:42860 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:42862 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:34022 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:34034 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:34048 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:52186 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:52190 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:52204 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:37426 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:37428 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:37430 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:34024 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:34028 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:34036 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:53516 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:53518 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:53534 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:50128 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:50140 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:50142 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:50708 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:50716 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:50718 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:44628 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:44642 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:44650 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:54644 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:54648 - "GET /orders HTTP/1.1" 200 OK
-INFO:     10.0.2.15:54650 - "GET /orders HTTP/1.1" 200 OK
-dev@dev-vm:~/Downloads/lab__4/backend$ microk8s kubectl describe pod -l app=backend | grep Image:
-    Image:          my-backend:v4
-    
-
 # Лабораторная работа №4.1 Создание и развертывание полнофункционального приложения в Kubernetes
 
 |Вариант|Название системы|Бизнес-задача|Данные (Пример)|
@@ -662,4 +606,41 @@ class OrderResponse(OrderCreate):
     id: int
     class Config:
         orm_mode = True
+```
+
+`crud.py`
+```python
+from sqlalchemy.orm import Session
+from models import Order
+from schemas import OrderCreate, OrderUpdate
+
+def create_order(db: Session, order: OrderCreate):
+    # Преобразуем список OrderItem в список словарей
+    items_dicts = [item.dict() for item in order.items]
+    db_order = Order(
+        order_number=order.order_number,
+        items=items_dicts,
+        amount=order.amount,
+        delivery_address=order.delivery_address,
+        status=order.status
+    )
+    db.add(db_order)
+    db.commit()
+    db.refresh(db_order)
+    return db_order
+
+def update_order(db: Session, order_id: int, order_update: OrderUpdate):
+    db_order = get_order(db, order_id)
+    if not db_order:
+        return None
+    update_data = order_update.dict(exclude_unset=True)
+    if 'items' in update_data and update_data['items'] is not None:
+        update_data['items'] = [item.dict() for item in update_data['items']]
+    for key, value in update_data.items():
+        setattr(db_order, key, value)
+    db.commit()
+    db.refresh(db_order)
+    return db_order
+
+# Остальные функции (get_order, get_orders, delete_order) без изменений
 ```
