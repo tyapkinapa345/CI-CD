@@ -296,7 +296,7 @@ microk8s kubectl delete deployment --all
 microk8s kubectl delete svc backend-service frontend-service postgres-service
 
 # 2. Сборка образов с тегом v3 (исправленный код + статус)
-cd ~/code_lab/lab_4/backend
+cd backend
 docker build -t my-backend:v3 .
 cd ../frontend
 docker build -t my-frontend:v3 .
@@ -347,14 +347,13 @@ microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v3
 ### 7.3 Работающее приложение в браузере
 
 ![Форма создания заказа](screenshots/order_form.png)  
-*Боковая панель с полями: номер заказа, товары, сумма, адрес, выпадающий список статусов.*
 
 ![Таблица заказов](screenshots/orders_table.png)  
-*Таблица отображает id, номер, товары, сумму, адрес и статус. Присутствуют кнопки удаления и обновления статуса.*
 
 ## 8. Местонахождение файлов
 
 Все файлы находся в данном репозитории [lab__4](code_lab/lab_4).
+Так же приложен файл [команды в терминале](terminal_lab__4.sh). Неполный из-за прекращения отображения ранее использованных команд некоторое количество строк назад.
 
 ## 9. Заключение
 
