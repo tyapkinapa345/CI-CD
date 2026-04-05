@@ -1,25 +1,4 @@
 
-➕ Create New Order
-Order Number*
-
-Items* (one per line)
-
-Total Amount*
-
-0.01
-
-
-Delivery Address*
-
-
-📦 Order Management System
-📋 All Orders
-Cannot connect to backend: HTTPConnectionPool(host='backend-service', port=8000): Max retries exceeded with url: /orders (Caused by NameResolutionError("HTTPConnection(host='backend-service', port=8000): Failed to resolve 'backend-service' ([Errno -5] No address associated with hostname)"))
-
-No orders yet. Create one using the sidebar.
-
-Made with Streamlit
-
 
 ## Выполнение лабораторной работы 4.1: Order System
 
