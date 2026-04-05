@@ -375,6 +375,7 @@ microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v3
 
 ## Реализация UPD
 
+Обновленный `frontend/app.py`
 ```python
 import streamlit as st
 import requests
@@ -388,41 +389,79 @@ st.title("📦 Order Management System")
 
 status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
 
+# --- Инициализация сессии для списка товаров ---
+if 'items_list' not in st.session_state:
+    st.session_state.items_list = []  # каждый элемент: {"name": "", "quantity": 1}
+
+# --- Функция для добавления товара в сессию ---
+def add_item():
+    if st.session_state.new_item_name and st.session_state.new_item_quantity > 0:
+        st.session_state.items_list.append({
+            "name": st.session_state.new_item_name,
+            "quantity": st.session_state.new_item_quantity
+        })
+        st.session_state.new_item_name = ""
+        st.session_state.new_item_quantity = 1
+
+def remove_item(index):
+    st.session_state.items_list.pop(index)
+
 # --- Боковая панель: создание заказа ---
 with st.sidebar:
     st.header("➕ Create New Order")
     with st.form("create_order_form"):
         order_number = st.text_input("Order Number*", help="Unique alphanumeric")
-        items = st.text_area("Items* (one per line)", help="Enter each item on new line")
+        
+        st.subheader("Items*")
+        # Поля для добавления нового товара
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.text_input("Item name", key="new_item_name", placeholder="e.g., Laptop")
+        with col2:
+            st.number_input("Quantity", min_value=1, step=1, key="new_item_quantity", value=1)
+        with col3:
+            st.button("➕ Add", on_click=add_item, use_container_width=True)
+        
+        # Отображение текущего списка товаров
+        if st.session_state.items_list:
+            st.write("**Current items:**")
+            for idx, item in enumerate(st.session_state.items_list):
+                col_a, col_b, col_c = st.columns([2, 1, 0.5])
+                col_a.write(f"{item['name']}")
+                col_b.write(f"x{item['quantity']}")
+                if col_c.button("❌", key=f"del_{idx}"):
+                    remove_item(idx)
+                    st.rerun()
+        else:
+            st.info("No items added yet")
+        
         amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
         address = st.text_area("Delivery Address*")
         status = st.selectbox("Status", status_options, index=0)
+        
         submitted = st.form_submit_button("Create Order")
         
         if submitted:
-            if not all([order_number, items, amount, address]):
-                st.error("All fields are required")
+            if not all([order_number, address]) or not st.session_state.items_list:
+                st.error("Order number, address and at least one item are required")
             else:
-                items_list = [item.strip() for item in items.split("\n") if item.strip()]
-                if not items_list:
-                    st.error("At least one item is required")
-                else:
-                    payload = {
-                        "order_number": order_number,
-                        "items": items_list,
-                        "amount": amount,
-                        "delivery_address": address,
-                        "status": status
-                    }
-                    try:
-                        resp = requests.post(f"{BACKEND_URL}/orders", json=payload)
-                        if resp.status_code == 201:
-                            st.success("Order created successfully!")
-                            st.rerun()
-                        else:
-                            st.error(f"Error: {resp.json().get('detail', 'Unknown error')}")
-                    except Exception as e:
-                        st.error(f"Connection error: {e}")
+                payload = {
+                    "order_number": order_number,
+                    "items": st.session_state.items_list,
+                    "amount": amount,
+                    "delivery_address": address,
+                    "status": status
+                }
+                try:
+                    resp = requests.post(f"{BACKEND_URL}/orders", json=payload)
+                    if resp.status_code == 201:
+                        st.success("Order created successfully!")
+                        st.session_state.items_list = []  # очистить список
+                        st.rerun()
+                    else:
+                        st.error(f"Error: {resp.json().get('detail', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
 
 # --- Основная область: список заказов ---
 st.header("📋 All Orders")
@@ -445,32 +484,36 @@ orders = fetch_orders()
 if orders:
     df = pd.DataFrame(orders)
     
-    # ---- UPD-2: Добавляем колонку "Количество товаров" ----
-    df['item_count'] = df['items'].apply(len)   # items - это список
+    # --- Обработка items: преобразуем список объектов в строку "name (quantity), ..." ---
+    def format_items(items_list):
+        if not items_list:
+            return ""
+        return ", ".join([f"{item['name']} ({item['quantity']})" for item in items_list])
     
-    # Преобразуем список товаров в строку для красивого отображения
-    df['items_str'] = df['items'].apply(lambda x: ", ".join(x))
+    def total_quantity(items_list):
+        return sum(item['quantity'] for item in items_list)
     
-    # ---- Подготовка таблицы для вывода (русские названия) ----
+    df['items_str'] = df['items'].apply(format_items)
+    df['total_quantity'] = df['items'].apply(total_quantity)
+    
+    # --- Подготовка таблицы для вывода ---
     display_df = df.rename(columns={
         'id': 'ID',
         'order_number': 'Order №',
         'items_str': 'Items',
-        'item_count': 'Qty',
+        'total_quantity': 'Total Qty',
         'amount': 'Amount ($)',
         'delivery_address': 'Address',
         'status': 'Status'
     })
-    # Выбираем порядок колонок
-    columns_order = ['ID', 'Order №', 'Items', 'Qty', 'Amount ($)', 'Address', 'Status']
+    columns_order = ['ID', 'Order №', 'Items', 'Total Qty', 'Amount ($)', 'Address', 'Status']
     st.dataframe(display_df[columns_order], use_container_width=True)
     
-    # ---- UPD-1: Статистика (количество заказов, сумма, распределение по статусам) ----
+    # --- Статистика ---
     st.subheader("📊 Statistics")
-    
     total_orders = len(df)
     total_revenue = df['amount'].sum()
-    total_items_sold = df['item_count'].sum()
+    total_items_sold = df['total_quantity'].sum()
     
     col1, col2 = st.columns(2)
     with col1:
@@ -483,10 +526,8 @@ if orders:
             status_counts = df['status'].value_counts().reset_index()
             status_counts.columns = ['Status', 'Count']
             st.dataframe(status_counts, use_container_width=True)
-        else:
-            st.info("No status data available")
     
-    # ---- Удаление заказа (оставляем как было) ----
+    # --- Удаление заказа ---
     st.subheader("🗑️ Delete Order")
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -504,7 +545,7 @@ if orders:
             except Exception as e:
                 st.error(f"Error: {e}")
     
-    # ---- Обновление статуса ----
+    # --- Обновление статуса ---
     st.subheader("✏️ Update Order Status")
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
@@ -525,4 +566,44 @@ if orders:
                 st.error(f"Error: {e}")
 else:
     st.info("No orders yet. Create one using the sidebar.")
+```
+
+Строчка `backend/models.py`
+```python
+items = Column(JSON, nullable=False)   # пример: [{"name": "мышь", "quantity": 10}, ...]
+```
+
+ `backend/schemas.py`
+```python
+from pydantic import BaseModel, Field, validator
+from typing import List, Optional
+
+class OrderItem(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    quantity: int = Field(..., ge=1, le=10000)
+
+class OrderCreate(BaseModel):
+    order_number: str = Field(..., min_length=1, max_length=50)
+    items: List[OrderItem]   # теперь список объектов с name и quantity
+    amount: float = Field(..., gt=0)
+    delivery_address: str = Field(..., min_length=5)
+    status: Optional[str] = Field('новый', max_length=50)
+
+    @validator('order_number')
+    def order_number_alphanumeric(cls, v):
+        if not v.replace('-', '').replace('_', '').isalnum():
+            raise ValueError('Order number must be alphanumeric (dash/underscore allowed)')
+        return v
+
+class OrderUpdate(BaseModel):
+    order_number: Optional[str] = None
+    items: Optional[List[OrderItem]] = None
+    amount: Optional[float] = Field(None, gt=0)
+    delivery_address: Optional[str] = None
+    status: Optional[str] = Field(None, max_length=50)
+
+class OrderResponse(OrderCreate):
+    id: int
+    class Config:
+        orm_mode = True
 ```
