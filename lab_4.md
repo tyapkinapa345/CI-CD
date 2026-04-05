@@ -1,4 +1,66 @@
-
+dev@dev-vm:~/Downloads/lab__4/frontend$ docker build -t my-frontend:v3 .
+[+] Building 0.6s (10/10) FINISHED                                                                                                                                                                                         docker:default
+ => [internal] load build definition from Dockerfile                                                                                                                                                                                 0.0s
+ => => transferring dockerfile: 258B                                                                                                                                                                                                 0.0s
+ => [internal] load metadata for docker.io/library/python:3.9-slim                                                                                                                                                                   0.5s
+ => [internal] load .dockerignore                                                                                                                                                                                                    0.0s
+ => => transferring context: 2B                                                                                                                                                                                                      0.0s
+ => [1/5] FROM docker.io/library/python:3.9-slim@sha256:2d97f6910b16bd338d3060f261f53f144965f755599aab1acda1e13cf1731b1b                                                                                                             0.0s
+ => [internal] load build context                                                                                                                                                                                                    0.0s
+ => => transferring context: 134B                                                                                                                                                                                                    0.0s
+ => CACHED [2/5] WORKDIR /app                                                                                                                                                                                                        0.0s
+ => CACHED [3/5] COPY requirements.txt .                                                                                                                                                                                             0.0s
+ => CACHED [4/5] RUN pip install --no-cache-dir -r requirements.txt                                                                                                                                                                  0.0s
+ => CACHED [5/5] COPY . .                                                                                                                                                                                                            0.0s
+ => exporting to image                                                                                                                                                                                                               0.0s
+ => => exporting layers                                                                                                                                                                                                              0.0s
+ => => writing image sha256:5c617fbe42a4544cc4528f4c8fa2589ef2bae137e272bd3a1f434092b71992cb                                                                                                                                         0.0s
+ => => naming to docker.io/library/my-frontend:v3                                                                                                                                                                                    0.0s
+dev@dev-vm:~/Downloads/lab__4/frontend$ docker save my-frontend:v3 | microk8s ctr image import -
+unpacking docker.io/library/my-frontend:v3 (sha256:3bc6f2920a10548a24728849644e3f8eb22e1c78158763af0de637a4708ccea8)...done
+dev@dev-vm:~/Downloads/lab__4/frontend$ microk8s kubectl set image deployment/frontend-deploy frontend=my-frontend:v3
+dev@dev-vm:~/Downloads/lab__4/frontend$ cat -n app.py | head -40
+     1  import streamlit as st
+     2  import requests
+     3  import pandas as pd
+     4  import os
+     5
+     6  BACKEND_URL = os.getenv("BACKEND_URL", "http://backend-service:8000")
+     7
+     8  st.set_page_config(page_title="Order System", layout="wide")
+     9  st.title("📦 Order Management System")
+    10
+    11  # Список статусов (глобально, чтобы был доступен во всех блоках)
+    12  status_options = ['новый', 'в обработке', 'отправлен', 'доставлен', 'отменён']
+    13
+    14  # --- Боковая панель для создания заказа ---
+    15  with st.sidebar:
+    16      st.header("➕ Create New Order")
+    17      with st.form("create_order_form"):
+    18          order_number = st.text_input("Order Number*", help="Unique alphanumeric")
+    19          items = st.text_area("Items* (one per line)", help="Enter each item on new line")
+    20          amount = st.number_input("Total Amount*", min_value=0.01, step=0.01, format="%.2f")
+    21          address = st.text_area("Delivery Address*")
+    22          status = st.selectbox("Status", status_options, index=0)
+    23          submitted = st.form_submit_button("Create Order")
+    24          
+    25          if submitted:
+    26              if not all([order_number, items, amount, address]):
+    27                  st.error("All fields are required")
+    28              else:
+    29                  items_list = [item.strip() for item in items.split("\n") if item.strip()]
+    30                  if not items_list:
+    31                      st.error("At least one item is required")
+    32                  else:
+    33                      payload = {
+    34                          "order_number": order_number,
+    35                          "items": items_list,
+    36                          "amount": amount,
+    37                          "delivery_address": address,
+    38                          "status": status
+    39                      }
+    40                      try:
+dev@dev-vm:~/Downloads/lab__4/frontend$ 
 
 ## Выполнение лабораторной работы 4.1: Order System
 
